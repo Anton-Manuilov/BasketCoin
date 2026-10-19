@@ -9,7 +9,7 @@
 ```bash
 export RPC=https://sepolia.base.org
 export VAULT=0x...        # BasketVault
-export TOKEN=0x...        # BasketToken (BSKT)
+export TOKEN=0x...        # BasketToken (BKT)
 export USDT=0x...         # TestUSDT
 export USDC=0x...         # TestUSDC
 export OWNER=0x...        # владелец Vault (оракул)
@@ -25,7 +25,7 @@ export OWNER=0x...        # владелец Vault (оракул)
 | Индекс, рабочая цена, ручная цена стейбла | USD × 1e18 | `1.0234` → `1023400000000000000` |
 | Минимальный минт | USD × 1e18 | `$50` → `50000000000000000000` |
 | Суммы TestUSDT/TestUSDC | 6 знаков | `1000` → `1000000000` |
-| BasketCoin (BSKT) | 18 знаков | |
+| BasketCoin (BKT) | 18 знаков | |
 | Покрытие | bps | `12000` = 120% |
 
 Перевод: `cast to-wei 1.0234` → `1023400000000000000`; обратно `cast from-wei 1023400000000000000`.
@@ -48,7 +48,7 @@ set -a; . /home/box/.secrets/basketcoin-deployer.env; set +a
 OWNER_ADDRESS=0x54534F6EE2Da9dC9fb06d64617CE9301253E0F06 script/dry-run-anvil.sh
 ```
 
-Скрипт деплоит TestUSDT, TestUSDC, BasketToken (BSKT), BasketVault, выдаёт Vault роль `MINTER_ROLE`,
+Скрипт деплоит TestUSDT, TestUSDC, BasketToken (BKT), BasketVault, выдаёт Vault роль `MINTER_ROLE`,
 создаёт корзину `1` со стартовым индексом `1.00` и записывает адреса в `deployments/base-sepolia.json`.
 Фидов у стейблов нет: Vault использует ручную цену `$1` (её можно менять, см. §6).
 
@@ -171,8 +171,8 @@ cast send $USDT "faucet(uint256)" 10000000000 --rpc-url $RPC --interactive      
 cast send $USDT "approve(address,uint256)" $VAULT 1000000000 --rpc-url $RPC --interactive
 cast call $VAULT "previewMint(uint256,address,uint256)(uint256)" 1 $USDT 1000000000 --rpc-url $RPC
 cast send $VAULT "mint(uint256,address,uint256,uint256)" 1 $USDT 1000000000 0 --rpc-url $RPC --interactive
-cast call $VAULT "quoteRedeem(uint256,address,uint256)" 1 $USDT <BSKT_WEI> --rpc-url $RPC
-cast send $VAULT "redeem(uint256,address,uint256,uint256)" 1 $USDT <BSKT_WEI> 0 --rpc-url $RPC --interactive
+cast call $VAULT "quoteRedeem(uint256,address,uint256)" 1 $USDT <BKT_WEI> --rpc-url $RPC
+cast send $VAULT "redeem(uint256,address,uint256,uint256)" 1 $USDT <BKT_WEI> 0 --rpc-url $RPC --interactive
 ```
 `minTokensOut` / `minStableOut` = 0 только для теста; на сайте подставляйте значение из preview с допуском.
 Минимальный минт — $50.

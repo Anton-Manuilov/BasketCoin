@@ -25,8 +25,8 @@ abstract contract InvariantBase is Test {
         MockStable dai = new MockStable("Dai", "DAI", 18);
         vault = new BasketVault(owner, treasury, address(usdt), address(usdc), 50e18);
         feed = new MockFeed(8, 1e8);
-        toks[0] = new BasketToken("BasketCoin", "BSKT", owner);
-        toks[1] = new BasketToken("BasketCoin EUR", "BSKT-EUR", owner);
+        toks[0] = new BasketToken("BasketCoin", "BKT", owner);
+        toks[1] = new BasketToken("BasketCoin EUR", "BKT-EUR", owner);
         vm.startPrank(owner);
         toks[0].grantRole(toks[0].MINTER_ROLE(), address(vault));
         toks[1].grantRole(toks[1].MINTER_ROLE(), address(vault));

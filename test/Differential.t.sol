@@ -34,7 +34,7 @@ contract DifferentialRoundingTest is BaseTest {
     /// создаётся сразу с индексом p (стартовый индекс лимитом не ограничен). Вызывать в начале теста.
     function _setIndex(uint256 p) internal {
         vault = new BasketVault(owner, treasury, address(usdt), address(usdc), 50e18);
-        coin = new BasketToken("BasketCoin", "BSKT", owner);
+        coin = new BasketToken("BasketCoin", "BKT", owner);
         vm.startPrank(owner);
         coin.grantRole(coin.MINTER_ROLE(), address(vault));
         vault.addBasket(BASKET, coin, p);

@@ -41,7 +41,7 @@ contract BasketVaultTest is Test {
         usdt = new MockStable("Tether USD", "USDT", 6);
         usdc = new MockStable("USD Coin", "USDC", 6);
         vault = new BasketVault(owner, treasury, address(usdt), address(usdc), 50e18);
-        coin = new BasketToken("BasketCoin", "BSKT", owner);
+        coin = new BasketToken("BasketCoin", "BKT", owner);
 
         vm.startPrank(owner);
         coin.grantRole(coin.MINTER_ROLE(), address(vault));
@@ -480,7 +480,7 @@ contract BasketVaultTest is Test {
 
     // ------------------------------------------------- архитектура: 2-я корзина
     function test_SecondBasket_SeparateToken() public {
-        BasketToken eur = new BasketToken("BasketCoin EUR", "BSKT-EUR", owner);
+        BasketToken eur = new BasketToken("BasketCoin EUR", "BKT-EUR", owner);
         vm.startPrank(owner);
         eur.grantRole(eur.MINTER_ROLE(), address(vault));
         vault.addBasket(2, eur, 1.08e18);

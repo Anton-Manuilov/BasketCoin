@@ -96,6 +96,8 @@ contract TestnetTest is Test {
         assertTrue(token.hasRole(token.MINTER_ROLE(), d.vault));
         assertEq(vault.feeRecipient(), makeAddr("treasury"));
         assertEq(vault.minMintUsd(), 50e18);
+        assertEq(token.symbol(), "BKT");
+        assertEq(token.name(), "BasketCoin");
         (, uint256 index,,,, bool exists) = vault.baskets(1);
         assertTrue(exists);
         assertEq(index, 1e18);

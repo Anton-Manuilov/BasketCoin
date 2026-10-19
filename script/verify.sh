@@ -25,9 +25,9 @@ DEPLOYER=$(j .deployer); FEE=$(j .feeRecipient); MINMINT=$(j .minMintUsd)
 
 # Аргументы конструкторов ровно такие, как в script/Deploy.s.sol:
 #   BasketVault(deployer, feeRecipient, TestUSDT, TestUSDC, minMintUsd)
-#   BasketToken("BasketCoin", "BSKT", deployer)
+#   BasketToken("BasketCoin", "BKT", deployer)
 VAULT_ARGS=$(cast abi-encode "constructor(address,address,address,address,uint256)" "$DEPLOYER" "$FEE" "$USDT" "$USDC" "$MINMINT")
-TOKEN_ARGS=$(cast abi-encode "constructor(string,string,address)" "BasketCoin" "BSKT" "$DEPLOYER")
+TOKEN_ARGS=$(cast abi-encode "constructor(string,string,address)" "BasketCoin" "BKT" "$DEPLOYER")
 
 # адрес | контракт | аргументы конструктора
 TARGETS=(

@@ -80,7 +80,7 @@ contract Deploy is Script {
         d.usdc = address(new TestUSDC());
         // Vault и токен создаются с деплоером в роли владельца/админа, чтобы настроить их в той же сессии.
         BasketVault vault = new BasketVault(deployer, c.feeRecipient, d.usdt, d.usdc, c.minMintUsd);
-        BasketToken token = new BasketToken("BasketCoin", "BSKT", deployer);
+        BasketToken token = new BasketToken("BasketCoin", "BKT", deployer);
         token.grantRole(token.MINTER_ROLE(), address(vault));
         vault.addBasket(c.basketId, token, c.initialIndex);
 

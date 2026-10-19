@@ -302,7 +302,7 @@ contract MintRedeemTest is BaseTest {
 
     // ------------------------------------------------ несколько корзин с общим стейблом
     function test_MultiBasket_ReserveIsolation() public {
-        BasketToken eur = new BasketToken("BasketCoin EUR", "BSKT-EUR", owner);
+        BasketToken eur = new BasketToken("BasketCoin EUR", "BKT-EUR", owner);
         vm.startPrank(owner);
         eur.grantRole(eur.MINTER_ROLE(), address(vault));
         vault.addBasket(2, eur, 1.08e18);
@@ -335,7 +335,7 @@ contract MintRedeemTest is BaseTest {
     }
 
     function test_MultiBasket_StablePriceChangeSyncsAllBaskets() public {
-        BasketToken eur = new BasketToken("BasketCoin EUR", "BSKT-EUR", owner);
+        BasketToken eur = new BasketToken("BasketCoin EUR", "BKT-EUR", owner);
         vm.startPrank(owner);
         eur.grantRole(eur.MINTER_ROLE(), address(vault));
         vault.addBasket(2, eur, 1e18);

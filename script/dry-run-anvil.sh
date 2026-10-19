@@ -60,11 +60,11 @@ expect_revert 0xace70cbd $U "faucet(uint256)" 10000000001 --private-key $USR_PK;
 echo "== approve + mint 1000 tUSDT"; ok $U "approve(address,uint256)" $V 1000000000 --private-key $USR_PK
 ok $V "mint(uint256,address,uint256,uint256)" 1 $U 1000000000 0 --private-key $USR_PK
 BAL=$(call $T "balanceOf(address)(uint256)" $USR)
-echo "   BSKT=$BAL coverage=$(call $V 'collateralRatioBps(uint256)(uint256)' 1)bps fee→treasury=$(call $U 'balanceOf(address)(uint256)' $FEE)"
+echo "   BKT=$BAL coverage=$(call $V 'collateralRatioBps(uint256)(uint256)' 1)bps fee→treasury=$(call $U 'balanceOf(address)(uint256)' $FEE)"
 HALF=$(python3 -c "print($BAL//2)")   # bash-арифметика переполняется на 1e20+
 echo "== redeem half ($HALF)"; echo "   quote payoutNow/fee: $(cast call $V 'previewRedeem(uint256,address,uint256)(uint256,uint256)' 1 $U $HALF --rpc-url $R | awk '{print $1}' | tr '\n' ' ')"
 ok $V "redeem(uint256,address,uint256,uint256)" 1 $U $HALF 0 --private-key $USR_PK
-echo "   BSKT=$(call $T 'balanceOf(address)(uint256)' $USR) tUSDT=$(call $U 'balanceOf(address)(uint256)' $USR) coverage=$(call $V 'collateralRatioBps(uint256)(uint256)' 1)bps"
+echo "   BKT=$(call $T 'balanceOf(address)(uint256)' $USR) tUSDT=$(call $U 'balanceOf(address)(uint256)' $USR) coverage=$(call $V 'collateralRatioBps(uint256)(uint256)' 1)bps"
 echo "== pause"; ok $V "pause()" "${OWN_SIGN[@]}"
 expect_revert 0xd93c0665 $V "mint(uint256,address,uint256,uint256)" 1 $U 100000000 0 --private-key $USR_PK; echo "   mint на паузе → EnforcedPause ✓"
 ok $V "unpause()" "${OWN_SIGN[@]}"
@@ -95,5 +95,5 @@ ok $V "setWorkingPrice(uint256,uint256)" 1 1050600000000000000 "${OWN_SIGN[@]}"
 expect_revert 0x3158719a $V "setWorkingPrice(uint256,uint256)" 1 1050600000000000001 "${OWN_SIGN[@]}"; echo "   workingPrice 1.0506 ✓ (+3%), 1.0506…01 → PriceOutOfBand ✓"
 echo "== mint tUSDC после нового индекса"; ok $C "faucet(uint256)" 500000000 --private-key $USR_PK; ok $C "approve(address,uint256)" $V 500000000 --private-key $USR_PK
 ok $V "mint(uint256,address,uint256,uint256)" 1 $C 500000000 0 --private-key $USR_PK
-echo "   BSKT=$(call $T 'balanceOf(address)(uint256)' $USR) coverage=$(call $V 'collateralRatioBps(uint256)(uint256)' 1)bps"
+echo "   BKT=$(call $T 'balanceOf(address)(uint256)' $USR) coverage=$(call $V 'collateralRatioBps(uint256)(uint256)' 1)bps"
 echo "DRY RUN OK"
