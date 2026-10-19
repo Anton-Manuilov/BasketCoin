@@ -13,7 +13,7 @@ abstract contract InvariantBase is Test {
     BasketToken[2] toks;
     address[] stables;
     MockFeed feed;
-    address owner = makeAddr("owner");
+    address owner = makeAddr("anton");
     address treasury = makeAddr("treasury");
     address[] actors;
     VaultHandler handler;

@@ -15,7 +15,7 @@ contract RedeemTiersTest is Test {
     uint256 constant T_NOV28 = 1795824000; // 2026-11-28 00:00 UTC
     uint256 constant BASKET = 1;
 
-    address owner = makeAddr("owner");
+    address owner = makeAddr("anton");
     address treasury = makeAddr("treasury");
     address alice = makeAddr("alice");
     address bob = makeAddr("bob");

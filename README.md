@@ -72,7 +72,6 @@ test/
   Reentrancy.t.sol         атака через токен с хуками
   BasketVault.t.sol, RedeemTiers.t.sol — базовые сценарии
 script/invariant_stats.py  сводка откатов по действиям handler'а
-LICENSE                    MIT
 ```
 
 ## Запуск
@@ -88,7 +87,7 @@ python3 script/invariant_stats.py          # после прогона инва�
 Требуется Foundry ≥ 1.8 (проверено на forge 1.8.5), solc 0.8.24.
 
 ## Лицензия
-MIT — см. файл [`LICENSE`](LICENSE). Исходники помечены `SPDX-License-Identifier: MIT`.
+**Не решено.** В файлах стоит `SPDX-License-Identifier: MIT` (как при создании), но файла `LICENSE` нет — нужно решение Антона перед публикацией.
 
 ---
 
@@ -121,4 +120,4 @@ MIT — см. файл [`LICENSE`](LICENSE). Исходники помечены
 
   Raw outputs are in `test-results.txt`.
 
-**License:** MIT — see [`LICENSE`](LICENSE).
+**License:** undecided (SPDX MIT headers present, no LICENSE file yet).
