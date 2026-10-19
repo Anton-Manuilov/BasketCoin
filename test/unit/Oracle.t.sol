@@ -209,10 +209,10 @@ contract OracleTest is BaseTest {
         vault.setWorkingPrice(BASKET, 1.02e18);
         vm.warp(T_OCT28 + 5);
         vm.prank(owner);
-        vault.setIndex(BASKET, 2e18);
+        vault.setIndex(BASKET, 1.11e18); // ровно +11% — граница включительно
         (, uint256 idx, uint256 wp, uint256 key, uint64 ts,) = vault.baskets(BASKET);
-        assertEq(idx, 2e18);
-        assertEq(wp, 2e18);
+        assertEq(idx, 1.11e18);
+        assertEq(wp, 1.11e18);
         assertEq(key, 2026 * 12 + 9);
         assertEq(ts, T_OCT28 + 5);
     }
@@ -233,7 +233,7 @@ contract OracleTest is BaseTest {
 
     function test_WorkingPrice_BandAfterNewIndex_NonRoundIndex() public {
         vm.warp(T_OCT28);
-        uint256 idx = 1.234567890123456789e18;
+        uint256 idx = 1.034567890123456789e18; // нецелый индекс в пределах ±11%
         vm.startPrank(owner);
         vault.setIndex(BASKET, idx);
         uint256 band = (idx * 300) / 10_000; // округление вниз → полоса не шире 3%

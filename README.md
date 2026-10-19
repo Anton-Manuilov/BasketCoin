@@ -13,6 +13,7 @@ BasketCoin — токен, цена которого следует индекс
 |---|---|
 | Оракул | только владелец |
 | Индекс | `setIndex` — только 28-го (UTC), не чаще раза в месяц |
+| Лимит индекса | не более **±11%** от предыдущего индекса за одно обновление (константа 1100 bps, границы включительно, округление в сторону строгости). Отказ — `IndexChangeTooLarge`, попытку месяца он не расходует. Стартовый индекс корзины не ограничен |
 | Рабочая цена | `setWorkingPrice` — в пределах ±3% от индекса |
 | Комиссия | 0,3% на минт и выкуп → `feeRecipient`, округление вверх |
 | Минимальный минт | `minMintUsd` ∈ [$50; $1000], по фактически полученной сумме до комиссии |
@@ -32,6 +33,7 @@ BasketCoin — токен, цена которого следует индекс
 | # | Действие (функция) | Событие | Параметры | Тест(ы) |
 |---|---|---|---|---|
 | 1 | Обновление индекса (`setIndex`) | `IndexUpdated` | basketId↑, oldIndex, newIndex, oldWorkingPrice, year, month, timestamp | `test_Ev_IndexUpdated_OldNewYearMonthTimestamp`, `test_Ev_IndexUpdated_WithTierChange`; Oracle.t.sol: `test_SetIndex_DayBoundaries`, `test_SetIndex_YearChange_February_LeapYear_SkippedMonth` |
+| 1a | Отказ `setIndex` по лимиту ±11% (v0.4) | — (revert, событий нет) | ошибка `IndexChangeTooLarge(basketId, oldIndex, newIndex, minAllowed, maxAllowed)` | IndexLimit.t.sol: `test_Limit_Plus11PlusOneWei_Reverts_WithArgs`, `test_Limit_Minus11MinusOneWei_Reverts_WithArgs`, `test_Limit_LargeJumps_Revert_WithArgs`, `testFuzz_Limit_SucceedsIffWithinBounds` |
 | 2 | Рабочая цена (`setWorkingPrice`) | `WorkingPriceUpdated` | basketId↑, oldPrice, newPrice, index | `test_Ev_WorkingPriceUpdated_OldNewIndex`; Oracle.t.sol: `test_WorkingPrice_ExactBandAndOneWeiOutside` |
 | 3 | Смена уровня покрытия (<115 / 115–140 / ≥140) из mint, redeem, topUp, setIndex, setWorkingPrice, setManualPrice, setStableFeed, pokeTier, pokeStable | `CoverageTierChanged` | basketId↑, oldTier↑, newTier↑, coverageBps (после операции) | `test_Ev_Minted_FirstMint_FullArgs_AndTierEvent`, `test_Ev_Redeemed_RaisesTier_EmitsTierAfterRedeemed`, `test_Ev_ReserveToppedUp_WithTierChangeToFull`, `test_Ev_IndexUpdated_WithTierChange`, `test_Ev_ManualPrice_TierChangeCarriesCoverage`, `test_Ev_Depeg_ViaPokeStable_AndPokeTier`; нет события без смены уровня: `test_Ev_NoTierEvent_WhenTierUnchanged_AllSources`; Boundaries.t.sol: `test_TierEvent_CarriesCoverage`, `test_PokeTier_NoEventWhenUnchanged_AndUnknownBasket` |
 | 4 | Пауза вкл/выкл (`pause`/`unpause`) | `Paused` / `Unpaused` (OpenZeppelin, подходят) | account (кто вызвал) | `test_Ev_PauseUnpause_StandardOZEvents` |
@@ -59,12 +61,12 @@ BasketCoin — токен, цена которого следует индекс
 ## Структура
 ```
 src/
-  BasketVault.sol          залог, реестр корзин, минт/выкуп, оракул, таймлок стейблов
+  BasketVault.sol          залог, реестр корзин, минт/выкуп, оракул (лимит индекса ±11%), таймлок стейблов
   BasketToken.sol          ERC20 корзины (mint/burn только MINTER_ROLE = Vault)
   libraries/DateLib.sol    timestamp → дата UTC
   interfaces/IAggregatorV3.sol
 test/
-  unit/                    граничные случаи, оракул, минт/выкуп, права и события
+  unit/                    граничные случаи, оракул, лимит индекса, минт/выкуп, права и события
   invariant/               handler + stateful-инварианты
   Differential.t.sol       сравнение с эталонами (Math.mulDiv, BokkyPooBah DateTime)
   Reentrancy.t.sol         атака через токен с хуками
@@ -93,7 +95,13 @@ python3 script/invariant_stats.py          # после прогона инва�
 **Status:** prototype, internal review only — **not externally audited**, never deployed.
 
 - `BasketVault` holds stablecoin collateral per (basket, stable) pair and mints/burns `BasketToken`s at the owner-set working price.
-- The owner is the oracle. The index can be set only on the 28th (UTC), at most once per calendar month. The working price must stay within ±3% of the index.
+- The owner is the oracle. The index can be set only on the 28th (UTC), at most once per calendar month.
+- Each `setIndex` may move the index by at most ±11% from the previous fixed index (`MAX_INDEX_CHANGE_BPS = 1100`, a constant):
+  - bounds are inclusive and rounded toward strictness: `min = ceil(old*0.89)`, `max = floor(old*1.11)`;
+  - violations revert with `IndexChangeTooLarge(basketId, oldIndex, newIndex, minAllowed, maxAllowed)` and do not consume the monthly slot;
+  - the initial index set in `addBasket` is unrestricted;
+  - the limit caps a single step, not the cumulative drift: ×3.50 / ×0.25 over 12 months.
+- The working price must stay within ±3% of the current index.
 - Mint is collateralised at 120%. Fee is 0.3% on mint and redeem (rounded up). Token output is rounded down with a single `mulDiv`.
 - Redemption tier depends on coverage *before* the redeem:
   - ≥140%: par + 20% buffer;

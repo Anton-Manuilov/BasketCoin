@@ -32,6 +32,11 @@ contract VaultHandler is Test {
     uint256 public vMintBelowFloor;
     uint256 public vSuccessWhilePaused;
     uint256 public vSuccessWhileDepegged;
+    uint256 public vIndexChangeOutOfLimit; // прошедший setIndex дальше ±11% от предыдущего индекса
+    uint256 public vIndexWrongfullyRejected; // отказ IndexChangeTooLarge при изменении в пределах ±11%
+    uint256 public vIndexAttemptBurned; // после отказа по лимиту повтор в том же месяце не прошёл
+    uint256 public indexUpdatesChecked; // сколько успешных setIndex проверено на лимит
+    uint256 public indexLimitRejections; // сколько отказов по лимиту (с повтором в том же месяце)
 
     // ---------------- статистика
     string[] public actionNames;
@@ -255,14 +260,29 @@ contract VaultHandler is Test {
                 (,, d) = DateLib.timestampToDate(block.timestamp);
             }
         }
-        uint256 newIdx = (idx * bps) / 10_000;
+        uint256 newIdx = (idx * bps) / 10_000; // диапазон 85–115% — часть попыток за пределами ±11%
         if (newIdx < 0.5e18) newIdx = 0.5e18;
         if (newIdx > 2e18) newIdx = 2e18;
+        // независимая проверка лимита: 0,89·old <= new <= 1,11·old (точно, без округлений)
+        bool withinLimit = newIdx * 10_000 >= idx * 8_900 && newIdx * 10_000 <= idx * 11_100;
         vm.prank(owner);
         try vault.setIndex(id, newIdx) {
             successes["setIndex"]++;
+            indexUpdatesChecked++;
+            if (!withinLimit) vIndexChangeOutOfLimit++;
         } catch (bytes memory err) {
             _recordRevert("setIndex", err);
+            if (err.length >= 4 && bytes4(err) == BasketVault.IndexChangeTooLarge.selector) {
+                if (withinLimit) vIndexWrongfullyRejected++;
+                // revert не должен расходовать попытку месяца: повтор с допустимым значением проходит
+                indexLimitRejections++;
+                vm.prank(owner);
+                try vault.setIndex(id, idx) {
+                    indexUpdatesChecked++;
+                } catch {
+                    vIndexAttemptBurned++;
+                }
+            }
         }
         _pokeAll(); // warp мог сделать фид устаревшим
     }

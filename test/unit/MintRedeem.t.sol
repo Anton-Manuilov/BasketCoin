@@ -123,10 +123,14 @@ contract MintRedeemTest is BaseTest {
     /// При MAX_PRICE и минимальном минте выпуск всё ещё > 0 (≈41 wei): ветка tokensOut == 0 в mint
     /// недостижима при текущих ограничениях и оставлена как защитная.
     function test_Mint_AtMaxIndex_StillNonZero() public {
-        vm.warp(T_OCT28);
-        vm.prank(owner);
-        vault.setIndex(BASKET, 1e36);
-        uint256 out = _mint(alice, address(usdt), 50e6);
+        // v0.4: индекс 1e36 достижим только как стартовый индекс новой корзины
+        BasketToken t2 = new BasketToken("T2", "T2", owner);
+        vm.startPrank(owner);
+        t2.grantRole(t2.MINTER_ROLE(), address(vault));
+        vault.addBasket(2, t2, 1e36);
+        vm.stopPrank();
+        vm.prank(alice);
+        uint256 out = vault.mint(2, address(usdt), 50e6, 0);
         assertEq(out, (uint256(49.85e6) * 1e12 * 1e22) / (1e36 * 12_000));
         assertGt(out, 0);
     }

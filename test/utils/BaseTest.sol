@@ -6,6 +6,7 @@ import {BasketVault} from "../../src/BasketVault.sol";
 import {BasketToken} from "../../src/BasketToken.sol";
 import {IAggregatorV3} from "../../src/interfaces/IAggregatorV3.sol";
 import {MockStable} from "../mocks/Mocks.sol";
+import {DateLib} from "../../src/libraries/DateLib.sol";
 
 /// Общая база для unit-тестов: Vault, корзина 1, USDT/USDC (6 знаков), акторы с балансами.
 abstract contract BaseTest is Test {
@@ -126,6 +127,29 @@ abstract contract BaseTest is Test {
     function _expectTier(uint256 basketId, BasketVault.RedeemTier oldT, BasketVault.RedeemTier newT) internal {
         vm.expectEmit(true, true, true, false, address(vault));
         emit BasketVault.CoverageTierChanged(basketId, oldT, newT, 0);
+    }
+
+    /// Переход на ближайшее 28-е число (UTC) месяца, в котором индекс корзины ещё не обновлялся.
+    function _warpToNextIndexDay(uint256 basketId) internal {
+        (,,, uint256 lastKey,,) = vault.baskets(basketId);
+        while (true) {
+            (uint256 y, uint256 m, uint256 d) = DateLib.timestampToDate(vm.getBlockTimestamp());
+            if (d == 28 && y * 12 + (m - 1) != lastKey) return;
+            vm.warp(vm.getBlockTimestamp() + 1 days);
+        }
+    }
+
+    /// Довести индекс корзины до target по правилам v0.4: по одному обновлению в месяц (28-го),
+    /// каждое — не дальше ±11% от предыдущего (берётся граница из indexBounds). Возвращает число месяцев.
+    function _setIndexStepwise(uint256 basketId, uint256 target) internal returns (uint256 steps) {
+        while (_idx(basketId) != target || steps == 0) {
+            _warpToNextIndexDay(basketId);
+            (uint256 lo, uint256 hi) = vault.indexBounds(basketId);
+            uint256 next = target < lo ? lo : (target > hi ? hi : target);
+            vm.prank(owner);
+            vault.setIndex(basketId, next);
+            ++steps;
+        }
     }
 
     function _ceilFee(uint256 x) internal pure returns (uint256) {

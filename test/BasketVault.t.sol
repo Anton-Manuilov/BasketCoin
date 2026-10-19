@@ -389,10 +389,10 @@ contract BasketVaultTest is Test {
         // после нового индекса полоса ±3% считается от нового индекса, рабочая цена сброшена
         vm.warp(T_OCT28);
         vm.startPrank(owner);
-        vault.setIndex(BASKET, 2e18);
+        vault.setIndex(BASKET, 1.1e18);
         (,, uint256 wp,,,) = vault.baskets(BASKET);
-        assertEq(wp, 2e18);
-        vault.setWorkingPrice(BASKET, 2.06e18);
+        assertEq(wp, 1.1e18);
+        vault.setWorkingPrice(BASKET, 1.133e18); // +3% от нового индекса
         vm.expectRevert();
         vault.setWorkingPrice(BASKET, 1.03e18);
         vm.stopPrank();

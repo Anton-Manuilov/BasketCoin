@@ -6,11 +6,13 @@ import {BasketVault} from "../src/BasketVault.sol";
 import {BasketToken} from "../src/BasketToken.sol";
 import {IAggregatorV3} from "../src/interfaces/IAggregatorV3.sol";
 import {MockStable, MockFeed} from "./mocks/Mocks.sol";
+import {DateLib} from "../src/libraries/DateLib.sol";
 
 /// Тесты трёхуровневого выкупа по покрытию: FULL (>=140%), STANDARD (115%..140%), SUSPENDED (<115%).
 contract RedeemTiersTest is Test {
     uint256 constant T_OCT19 = 1792368000; // 2026-10-19 00:00 UTC
     uint256 constant T_OCT28 = 1793145600; // 2026-10-28 00:00 UTC
+    uint256 constant T_NOV28 = 1795824000; // 2026-11-28 00:00 UTC
     uint256 constant BASKET = 1;
 
     address owner = makeAddr("anton");
@@ -74,6 +76,24 @@ contract RedeemTiersTest is Test {
     function _expectTier(BasketVault.RedeemTier oldT, BasketVault.RedeemTier newT) internal {
         vm.expectEmit(true, true, true, false, address(vault));
         emit BasketVault.CoverageTierChanged(BASKET, oldT, newT, 0);
+    }
+
+    /// v0.4: индекс меняется не более чем на ±11% за одно обновление (28-го, раз в месяц).
+    function _setIndexStepwise(uint256 target) internal returns (uint256 steps) {
+        while (true) {
+            (, uint256 idx,, uint256 lastKey,,) = vault.baskets(BASKET);
+            if (idx == target && steps > 0) return steps;
+            (uint256 y, uint256 m, uint256 d) = DateLib.timestampToDate(vm.getBlockTimestamp());
+            if (d != 28 || y * 12 + (m - 1) == lastKey) {
+                vm.warp(vm.getBlockTimestamp() + 1 days);
+                continue;
+            }
+            (uint256 lo, uint256 hi) = vault.indexBounds(BASKET);
+            uint256 next = target < lo ? lo : (target > hi ? hi : target);
+            vm.prank(owner);
+            vault.setIndex(BASKET, next);
+            ++steps;
+        }
     }
 
     function _standardOut(uint256 tokens) internal pure returns (uint256) {
@@ -195,10 +215,20 @@ contract RedeemTiersTest is Test {
 
     function test_Transition_ByIndexDrop() public {
         _mint(alice, address(usdt), 1_000e6);
+        // v0.4: сразу 0,85 нельзя (−15% > 11%) — отказ с аргументами, попытка месяца не сгорает
         vm.warp(T_OCT28);
+        vm.prank(owner);
+        vm.expectRevert(
+            abi.encodeWithSelector(BasketVault.IndexChangeTooLarge.selector, BASKET, 1e18, 0.85e18, 0.89e18, 1.11e18)
+        );
+        vault.setIndex(BASKET, 0.85e18);
+        vm.prank(owner);
+        vault.setIndex(BASKET, 0.89e18); // тот же месяц: 120% / 0,89 ≈ 134,8% — STANDARD
+        assertEq(uint256(vault.redeemTier(BASKET)), uint256(BasketVault.RedeemTier.Standard));
+        vm.warp(T_NOV28);
         _expectTier(BasketVault.RedeemTier.Standard, BasketVault.RedeemTier.Full);
         vm.prank(owner);
-        vault.setIndex(BASKET, 0.85e18); // 120% / 0.85 ≈ 141.2%
+        vault.setIndex(BASKET, 0.85e18); // 120% / 0,85 ≈ 141,2%
         assertGe(_cov(), 14_000);
     }
 
@@ -389,9 +419,8 @@ contract RedeemTiersTest is Test {
             vm.prank(owner);
             vault.topUpReserve(BASKET, address(usdt), topUp);
         }
-        vm.warp(T_OCT28);
+        _setIndexStepwise(indexBps * 1e14); // v0.4: 0,7…1,1 — за несколько месяцев по ≤ 11%
         vm.startPrank(owner);
-        vault.setIndex(BASKET, indexBps * 1e14);
         vault.setWorkingPrice(BASKET, (indexBps * 1e14 * driftBps) / 10_000);
         vm.stopPrank();
 

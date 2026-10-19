@@ -57,9 +57,9 @@ contract BoundariesTest is BaseTest {
     // ------------------------------------------------ 115%: ±1 bps и ±1 wei
     function test_115_MinusOneBps_Exact_PlusOneBps() public {
         uint256 t = _mint(alice, address(usdt), 1_000e6);
-        vm.warp(T_OCT28);
-        vm.prank(owner);
-        vault.setIndex(BASKET, 1.2e18); // 100%
+        // 100%: индекс 1,2 — с v0.4 за два месяца (1 → 1,11 → 1,2), каждый шаг ≤ 11%
+        assertEq(_setIndexStepwise(BASKET, 1.2e18), 2);
+        assertEq(_cov(), 10_000);
         _assertTier(SUS);
         _topUpTo(11_499, address(usdc));
         assertEq(_cov(), 11_499);
@@ -78,9 +78,7 @@ contract BoundariesTest is BaseTest {
 
     function test_115_OneWeiBelowAndExact() public {
         _mint(alice, address(usdt), 1_000e6);
-        vm.warp(T_OCT28);
-        vm.prank(owner);
-        vault.setIndex(BASKET, 1.2e18);
+        assertEq(_setIndexStepwise(BASKET, 1.2e18), 2); // 100%
         uint256 extra = _minExtraFor(11_500, address(dai));
         _topUp(address(dai), extra - 1);
         assertEq(_cov(), 11_499);
@@ -174,32 +172,50 @@ contract BoundariesTest is BaseTest {
     }
 
     // ------------------------------------------------ источник: setIndex (обе стороны)
+    /// С v0.4 индекс меняется не более чем на ±11% за месяц, поэтому каждый переход — отдельным шагом.
+    /// Покрытие 120% при индексе 1 (12 000 bps); cov = 12 000 / индекс.
     function test_Source_SetIndex_AllDirections() public {
         _mint(alice, address(usdt), 1_000e6);
+        vm.startPrank(owner);
         vm.warp(T_OCT28);
-        _expectTier(BASKET, STD, FULL);
-        vm.prank(owner);
-        vault.setIndex(BASKET, 0.85e18); // 141%
+        vault.setIndex(BASKET, 0.89e18); // −11%: 134,8% — всё ещё STANDARD
+        _assertTier(STD);
         vm.warp(T_NOV28);
-        _expectTier(BASKET, FULL, SUS);
-        vm.prank(owner);
-        vault.setIndex(BASKET, 1.1e18); // 109%
+        _expectTier(BASKET, STD, FULL);
+        vault.setIndex(BASKET, 0.85e18); // 141,2%
         vm.warp(T_DEC28_NOON);
-        _expectTier(BASKET, SUS, STD);
-        vm.prank(owner);
-        vault.setIndex(BASKET, 1e18); // 120%
+        _expectTier(BASKET, FULL, STD);
+        vault.setIndex(BASKET, 0.9435e18); // +11% ровно: 127,2%
         vm.warp(T_JAN28_2027);
         _expectTier(BASKET, STD, SUS);
-        vm.prank(owner);
-        vault.setIndex(BASKET, 1.05e18);
+        vault.setIndex(BASKET, 1.0472e18); // +10,99%: 114,6%
         vm.warp(T_FEB28_2027);
-        _expectTier(BASKET, SUS, FULL);
+        _expectTier(BASKET, SUS, STD);
+        vault.setIndex(BASKET, 1e18); // 120%
+        vm.stopPrank();
+        assertEq(_cov(), 12_000);
+    }
+
+    /// FULL ↔ SUSPENDED одним setIndex невозможны: 140/115 ≈ 1,217 > 1,11 и 115/140 ≈ 0,821 < 0,89.
+    function test_SetIndex_CannotJumpBetweenFullAndSuspendedInOneStep() public {
+        _mint(alice, address(usdt), 1_000e6);
+        _topUpTo(14_000, address(usdc));
+        _assertTier(FULL);
+        _warpToNextIndexDay(BASKET);
+        (, uint256 hi) = vault.indexBounds(BASKET);
         vm.prank(owner);
-        vault.setIndex(BASKET, 0.8e18); // 150%
-        vm.warp(T_FEB28_2028);
-        _expectTier(BASKET, FULL, STD);
+        vault.setIndex(BASKET, hi); // максимальный рост +11%
+        _assertTier(STD); // 14 000 / 1,11 ≈ 12 612 — не ниже 115%
+        assertGe(_cov(), 11_500);
+
+        // SUSPENDED → максимальное падение −11% не даёт FULL
+        _setIndexStepwise(BASKET, 1.3e18);
+        _assertTier(SUS);
+        _warpToNextIndexDay(BASKET);
+        (uint256 lo,) = vault.indexBounds(BASKET);
         vm.prank(owner);
-        vault.setIndex(BASKET, 0.9e18); // 133%
+        vault.setIndex(BASKET, lo);
+        assertLt(_cov(), 14_000);
     }
 
     // ------------------------------------------------ источник: setWorkingPrice (обе стороны)

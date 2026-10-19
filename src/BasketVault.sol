@@ -59,6 +59,9 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
     uint256 public constant DEPEG_BPS = 500;
     /// @notice День месяца (UTC), в который разрешено фиксировать индекс.
     uint256 public constant INDEX_UPDATE_DAY = 28;
+    /// @notice Жёсткий лимит изменения индекса за одно обновление setIndex: ±11% от предыдущего
+    ///         зафиксированного индекса корзины. Константа: owner не может её менять.
+    uint256 public constant MAX_INDEX_CHANGE_BPS = 1_100;
     /// @notice Таймлок добавления нового стейбла.
     uint256 public constant STABLE_TIMELOCK = 9 days;
     /// @notice Нижняя граница параметра минимального минта ($50).
@@ -310,6 +313,9 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
     error IndexAlreadyUpdatedThisMonth();
     error PriceOutOfBand(uint256 price, uint256 index);
     error InvalidPrice();
+    error IndexChangeTooLarge(
+        uint256 basketId, uint256 oldIndex, uint256 newIndex, uint256 minAllowed, uint256 maxAllowed
+    );
     error InvalidFeeRecipient(address recipient);
     error MinMintOutOfRange(uint256 value);
     error BelowMinMint(uint256 usdValue, uint256 minMintUsd);
@@ -378,7 +384,9 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
     // Оракул (только owner)
     // ---------------------------------------------------------------------
     /// @notice Фиксирует новый индекс. Разрешено только 28-го числа (UTC) и один раз в календарный месяц.
-    ///         Рабочая цена сбрасывается на новый индекс.
+    ///         Новый индекс — не дальше ±11% от предыдущего зафиксированного индекса (границы включительно;
+    ///         границы округляются в сторону строгости: min = ceil(old×0,89), max = floor(old×1,11)).
+    ///         Рабочая цена сбрасывается на новый индекс. Отказ (revert) не расходует попытку месяца.
     /// @param basketId корзина
     /// @param newIndex новый индекс, USD 18 знаков (0 < newIndex <= MAX_PRICE)
     function setIndex(uint256 basketId, uint256 newIndex) external onlyOwner {
@@ -390,12 +398,19 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
         // slither-disable-next-line incorrect-equality — сравнение ключей месяца, не балансов: строгое равенство корректно
         if (b.lastIndexMonthKey == key) revert IndexAlreadyUpdatedThisMonth();
         uint256 oldIndex = b.index;
+        (uint256 minAllowed, uint256 maxAllowed) = _indexBounds(oldIndex);
+        if (newIndex < minAllowed || newIndex > maxAllowed) {
+            revert IndexChangeTooLarge(basketId, oldIndex, newIndex, minAllowed, maxAllowed);
+        }
         uint256 oldWorking = b.workingPrice;
         b.index = newIndex;
         b.workingPrice = newIndex;
         b.lastIndexMonthKey = key;
         // forge-lint: disable-next-line(unsafe-typecast)
         b.lastIndexTimestamp = uint64(block.timestamp);
+        // Ложное срабатывание линтера: в setIndex нет внешних вызовов (DateLib, _indexBounds/Math.mulDiv —
+        // internal/pure; revert с кастомной ошибкой — не вызов).
+        // forge-lint: disable-next-line(reentrancy-events)
         emit IndexUpdated(basketId, oldIndex, newIndex, oldWorking, y, m, block.timestamp);
         _syncTier(basketId);
     }
@@ -738,6 +753,14 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
         return _tierOf(_coverageBps(basketId));
     }
 
+    /// @notice Допустимый диапазон следующего индекса корзины (для сайта/бота и проверок до транзакции).
+    /// @param basketId корзина
+    /// @return minAllowed нижняя граница включительно, ceil(index × 0,89)
+    /// @return maxAllowed верхняя граница включительно, floor(index × 1,11)
+    function indexBounds(uint256 basketId) external view returns (uint256 minAllowed, uint256 maxAllowed) {
+        return _indexBounds(_basket(basketId).index);
+    }
+
     /// @notice Число включённых стейблов.
     /// @return количество
     function stableCount() external view returns (uint256) {
@@ -753,6 +776,13 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
     // ---------------------------------------------------------------------
     // Внутренние
     // ---------------------------------------------------------------------
+    /// @dev Границы округляются в сторону строгости: нижняя вверх, верхняя вниз — диапазон никогда не шире ±11%.
+    ///      old <= MAX_PRICE = 1e36, поэтому old × 11100 не переполняется; mulDiv — для единообразия.
+    function _indexBounds(uint256 oldIndex) internal pure returns (uint256 minAllowed, uint256 maxAllowed) {
+        minAllowed = Math.mulDiv(oldIndex, BPS - MAX_INDEX_CHANGE_BPS, BPS, Math.Rounding.Ceil);
+        maxAllowed = Math.mulDiv(oldIndex, BPS + MAX_INDEX_CHANGE_BPS, BPS);
+    }
+
     function _validateFeeRecipient(address r) internal view {
         if (r == address(0)) revert ZeroAddress();
         if (r == address(this)) revert InvalidFeeRecipient(r);

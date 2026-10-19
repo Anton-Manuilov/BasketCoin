@@ -20,7 +20,7 @@ ERRORS = [
     "IndexAlreadyUpdatedThisMonth()", "PriceOutOfBand(uint256,uint256)", "InvalidPrice()", "InvalidFeeRecipient(address)",
     "MinMintOutOfRange(uint256)", "BelowMinMint(uint256,uint256)", "Slippage(uint256,uint256)",
     "InsufficientReserve(uint256,uint256)", "RenounceDisabled()", "RedemptionSuspended(uint256,uint256,uint256)",
-    "EnforcedPause()", "ERC20InsufficientBalance(address,uint256,uint256)", "ReentrancyGuardReentrantCall()",
+    "EnforcedPause()", "IndexChangeTooLarge(uint256,uint256,uint256,uint256,uint256)", "ERC20InsufficientBalance(address,uint256,uint256)", "ReentrancyGuardReentrantCall()",
 ]
 NAMES = {k4(e): e.split("(")[0] for e in ERRORS if k4(e)}
 
@@ -28,8 +28,12 @@ root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "invariant
 for path in sorted(glob.glob(os.path.join(root, "*.csv"))):
     agg = collections.OrderedDict()
     reasons = collections.defaultdict(collections.Counter)
+    metrics = collections.Counter()
     for line in open(path):
         name, c, s = line.strip().split(",")
+        if name.startswith("metric:"):
+            metrics[name[len("metric:"):]] += int(c)
+            continue
         if name.startswith("reason:"):
             _, action, sel = name.split(":")
             reasons[action][sel[:10]] += int(c)
@@ -49,3 +53,5 @@ for path in sorted(glob.glob(os.path.join(root, "*.csv"))):
     for action, cnt in reasons.items():
         parts = ", ".join(f"{NAMES.get(sel, sel)}={n}" for sel, n in cnt.most_common())
         print(f"  revert reasons [{action}]: {parts}")
+    for k, v in metrics.items():
+        print(f"  metric {k}: {v}")

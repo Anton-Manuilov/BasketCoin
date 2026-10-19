@@ -1,8 +1,8 @@
-# BasketCoin — отчёт о внутренней проверке (pre-audit)
+# BasketCoin — отчёт о внутренней проверке (pre-audit), v0.4
 
 > **Важно.** Это внутренняя проверка: её провёл тот же исполнитель, который писал код, автоматическими инструментами и тестами. **Это не внешний аудит** и не гарантия отсутствия уязвимостей. Перед деплоем с реальными средствами нужен независимый аудит (см. раздел 10).
 
-- Дата: 2026-10-19 (Asia/Saigon, UTC+7).
+- Дата: 2026-10-19 (Asia/Saigon, UTC+7). Версия v0.4 добавляет лимит изменения индекса ±11% (раздел 7.1).
 - Код: `src/` — commit в локальном git-репозитории (см. `git log`); нигде не публиковался и не деплоился.
 - Инструменты:
   - Solidity 0.8.24 (optimizer 200);
@@ -23,6 +23,7 @@
 - оракул — только ключ owner;
 - `setIndex` — только 28-го (UTC), не чаще раза в месяц;
 - рабочая цена — ±3% от индекса;
+- (v0.4, решение Антона) лимит изменения индекса за одно обновление — ±11%;
 - комиссия 0,3% на минт и выкуп → `feeRecipient`;
 - `minMint` — в диапазоне $50–$1000;
 - стейблы: USDT/USDC при запуске, новые — через таймлок 9 дней;
@@ -67,25 +68,26 @@
 
 | Профиль | Параметры | Результат |
 |---|---|---|
-| default | fuzz 256, invariant 64 runs × 50 depth | **183 passed, 0 failed, 0 skipped** (13 suites) |
-| ci (`FOUNDRY_PROFILE=ci`) | fuzz 10 000, invariant 1000 runs × 200 depth | **183 passed, 0 failed, 0 skipped** (13 suites), `real 1m59.538s` |
+| default | fuzz 256, invariant 64 runs × 50 depth | **198 passed, 0 failed, 0 skipped** (14 suites) |
+| ci (`FOUNDRY_PROFILE=ci`) | fuzz 10 000, invariant 1000 runs × 200 depth | **198 passed, 0 failed, 0 skipped** (14 suites), `real 2m2.215s` |
 
 По категориям:
 
 | Категория | Файл | Тестов |
 |---|---|---|
-| Границы покрытия и переходы уровней | `test/unit/Boundaries.t.sol` | 20 |
+| Границы покрытия и переходы уровней | `test/unit/Boundaries.t.sol` | 21 |
 | Оракул: депег, фиды, 28-е число, ±3% | `test/unit/Oracle.t.sol` (OracleTest) | 21 |
 | Регрессии DoS через фид | `test/unit/Oracle.t.sol` (FeedDoSRegressionTest) | 6 |
 | Минт/выкуп, минимум, комиссии, decimals, нестандартные токены, пауза, мультикорзины | `test/unit/MintRedeem.t.sol` | 25 |
 | Таймлок, права, ошибки, регрессии | `test/unit/Admin.t.sol` | 20 |
 | События (все параметры + отсутствие лишних) | `test/unit/Events.t.sol` | 26 |
+| Лимит изменения индекса ±11% (v0.4) | `test/unit/IndexLimit.t.sol` | 14 |
 | Реентрантность | `test/Reentrancy.t.sol` | 7 |
 | Дифференциальные (округление) | `test/Differential.t.sol` (DifferentialRoundingTest) | 4 |
 | Дифференциальные (DateLib) | `test/Differential.t.sol` (DateLibDifferentialTest) | 3 |
 | Базовые сценарии v0.1–v0.2 | `test/BasketVault.t.sol`, `test/RedeemTiers.t.sol` | 29 + 20 |
-| Инварианты | `test/invariant/Invariants.t.sol` | 2 сьюта (10 + 2 инварианта) |
-| **Итого** | | **183** |
+| Инварианты | `test/invariant/Invariants.t.sol` | 2 сьюта (11 + 2 инварианта) |
+| **Итого** | | **198** |
 
 ## 4. Инварианты
 Профиль ci:
@@ -107,28 +109,31 @@
 | 8 | `invariant_NothingWhilePaused` | ни один минт или выкуп не прошёл на паузе |
 | 9 | `invariant_NothingWhileDepegged` | ни один минт или выкуп не прошёл в депегнутом стейбле |
 | 10 | `invariant_TierMatchesCoverage` | `redeemTier` соответствует порогам по `collateralRatioBps` |
+| 11 | `invariant_IndexChangeWithinLimit` (v0.4) | каждый успешный `setIndex` в пределах ±11% от предыдущего; отказ `IndexChangeTooLarge` только вне ±11%; после отказа повтор в том же месяце проходит |
 
 Доля откатов вызовов Vault внутри handler'а. Это счётчик handler'а, он на 201 вызов больше счётчика Foundry (200 201 против 200 000).
 
 | Действие | Full: вызовов | откатов | % | NoProfit: вызовов | откатов | % |
 |---|---|---|---|---|---|---|
-| mint | 22 286 | 10 607 | 47,6% | 33 512 | 16 202 | 48,3% |
-| redeem | 21 941 | 12 327 | 56,2% | 33 280 | 18 703 | 56,2% |
-| topUp | 22 222 | 99 | 0,4% | — | — | — |
-| setManualPrice | 22 467 | 0 | 0% | 33 500 | 0 | 0% |
-| setFeedPrice | 22 257 | 0 | 0% | 33 502 | 0 | 0% |
-| setWorkingPrice | 22 136 | 3 574 | 16,1% | — | — | — |
-| setIndex | 22 388 | 11 042 | 49,3% | — | — | — |
-| togglePause | 22 121 | 0 | 0% | 33 257 | 0 | 0% |
-| warp | 22 383 | 0 | 0% | 33 150 | 0 | 0% |
-| **Итого** | 200 201 | 37 649 | **18,8%** | 200 201 | 34 905 | **17,4%** |
+| mint | 22 308 | 10 514 | 47,1% | 33 438 | 16 337 | 48,9% |
+| redeem | 22 480 | 12 472 | 55,5% | 33 409 | 19 238 | 57,6% |
+| topUp | 22 138 | 131 | 0,6% | — | — | — |
+| setManualPrice | 22 238 | 0 | 0% | 33 701 | 0 | 0% |
+| setFeedPrice | 22 199 | 0 | 0% | 33 123 | 0 | 0% |
+| setWorkingPrice | 22 130 | 3 559 | 16,1% | — | — | — |
+| setIndex | 22 320 | 13 880 | 62,2% | — | — | — |
+| togglePause | 22 150 | 0 | 0% | 33 339 | 0 | 0% |
+| warp | 22 238 | 0 | 0% | 33 191 | 0 | 0% |
+| **Итого** | 200 201 | 40 556 | **20,3%** | 200 201 | 35 575 | **17,8%** |
 
 Причины откатов (Full):
-- mint: EnforcedPause 5517, StableDepegged 4260, BelowMinMint 830;
-- redeem: EnforcedPause 5493, StableDepegged 2582, ZeroAmount 2129, InsufficientReserve 1872, RedemptionSuspended 251;
-- setWorkingPrice: PriceOutOfBand 3574;
-- setIndex: IndexAlreadyUpdatedThisMonth 11 042;
-- topUp: ZeroAmount 99.
+- mint: EnforcedPause 5678, StableDepegged 3963, BelowMinMint 873;
+- redeem: EnforcedPause 5604, StableDepegged 2539, ZeroAmount 2225, InsufficientReserve 1969, RedemptionSuspended 135;
+- setWorkingPrice: PriceOutOfBand 3559;
+- setIndex: IndexAlreadyUpdatedThisMonth 10 963, IndexChangeTooLarge 2917 (v0.4);
+- topUp: ZeroAmount 131.
+
+Лимит индекса (v0.4, Full): handler проверил 11 357 успешных `setIndex` (8440 прямых + 2917 повторных попыток в том же месяце после отказа по лимиту — все прошли). Нарушений инварианта 11: 0.
 
 Все откаты ожидаемые: это проверки самого протокола. Они и нужны, чтобы проверить инварианты 3, 8 и 9.
 
@@ -143,6 +148,10 @@
 | M4: комиссия минта не переводится в казну | сначала **не поймана**: см. T-01. После исправления — `invariant_FeesMatchGhost` и `invariant_BalanceEqualsReserves` |
 | M5: при выкупе не проверяется депег | `invariant_NothingWhileDepegged` |
 | M6: комиссия выкупа округляется вниз | `invariant_FeesMatchGhost` |
+| L1 (v0.4): проверка лимита индекса удалена | `invariant_IndexChangeWithinLimit` + IndexLimitTest: 8 тестов упали |
+| L2 (v0.4): нижняя граница округляется вниз, а не вверх | IndexLimitTest: 3 теста упали (инвариант этого не видит — нужна точность до wei) |
+| L3 (v0.4): лимит 12% вместо 11% | `invariant_IndexChangeWithinLimit` + IndexLimitTest: 10 тестов упали |
+| L4 (v0.4): границы исключительные (`<=`/`>=`) | `invariant_IndexChangeWithinLimit` + IndexLimitTest: 8 тестов упали |
 | E1: в `Minted` перепутаны coverageBefore/After | EventsTest: 2 теста упали |
 | E2: `setManualPrice` не синхронизирует депег | EventsTest: 1 тест упал |
 | E3: `CoverageTierChanged` выпускается всегда | EventsTest: 11 тестов упали |
@@ -193,13 +202,56 @@ Aderyn и Halmos не запускались (необязательные ин�
 | Файл | Lines | Statements | Branches | Funcs |
 |---|---|---|---|---|
 | BasketToken.sol | 100% (7/7) | 100% (4/4) | 100% (2/2) | 100% (3/3) |
-| BasketVault.sol | 100% (311/311) | 99,48% (381/383) | 96,72% (59/61) | 100% (52/52) |
+| BasketVault.sol | 100% (319/319) | 99,49% (391/393) | 96,77% (60/62) | 100% (54/54) |
 | DateLib.sol | 100% (14/14) | 100% (27/27) | 100% (3/3) | 100% (1/1) |
-| **Total** | 100% (332/332) | 99,52% (412/414) | 96,97% (64/66) | 100% (56/56) |
+| **Total** | 100% (340/340) | 99,53% (422/424) | 97,01% (65/67) | 100% (58/58) |
 
 Непокрытые ветки по lcov:
-1. `BasketVault.sol:557` — `if (tokensOut == 0) revert ZeroAmount()` в mint. Ветка недостижима при текущих ограничениях: при MAX_PRICE и $50 выпуск ≈ 41 wei (`test_Mint_AtMaxIndex_StillNonZero`). Оставлена как защитная.
-2. `BasketVault.sol:763` — `dec > 18` в `_addStable`. Её проверяет `test_Decimals_Above18_Rejected` через откат конструктора (`new BasketVault` с 19-decimal токеном), но forge coverage не засчитывает покрытие откатившегося деплоя. Из `executeStable` ветка недостижима: decimals проверяются ещё в `proposeStable`, если только decimals токена не изменятся за 9 дней.
+1. `BasketVault.sol:572` — `if (tokensOut == 0) revert ZeroAmount()` в mint. Ветка недостижима при текущих ограничениях: при MAX_PRICE и $50 выпуск ≈ 41 wei (`test_Mint_AtMaxIndex_StillNonZero`). Оставлена как защитная.
+2. `BasketVault.sol:795` — `dec > 18` в `_addStable`. Её проверяет `test_Decimals_Above18_Rejected` через откат конструктора (`new BasketVault` с 19-decimal токеном), но forge coverage не засчитывает покрытие откатившегося деплоя. Из `executeStable` ветка недостижима: decimals проверяются ещё в `proposeStable`, если только decimals токена не изменятся за 9 дней.
+
+### 7.1. v0.4: лимит изменения индекса ±11%
+Это не находка, а изменение по решению Антона: реализована бывшая рекомендация R-2.
+
+- `MAX_INDEX_CHANGE_BPS = 1100` (константа). `setIndex` принимает только `ceil(old×0,89) ≤ new ≤ floor(old×1,11)`.
+- Округление границ — в сторону строгости. Пример: при old = 1e18 + 7 wei
+  - min = 0,89e18 + 7;
+  - max = 1,11e18 + 7.
+- Отказ — `IndexChangeTooLarge(basketId, oldIndex, newIndex, minAllowed, maxAllowed)`. Revert не меняет состояние, поэтому попытка месяца не расходуется.
+- Стартовый индекс в `addBasket` не ограничен.
+- Рабочая цена ±3% считается от нового индекса.
+- Добавлена view `indexBounds(basketId)`.
+
+Тесты — `test/unit/IndexLimit.t.sol` (14 тестов, из них 1 fuzz):
+
+| Тест | Что проверяет |
+|---|---|
+| `test_Limit_Plus11Exact_Succeeds`, `test_Limit_Minus11Exact_Succeeds` | ровно ±11% разрешено |
+| `test_Limit_InsideRange_Succeeds`, `test_Limit_ZeroChange_Succeeds` | внутри диапазона и 0% |
+| `test_Limit_Plus11PlusOneWei_Reverts_WithArgs`, `test_Limit_Minus11MinusOneWei_Reverts_WithArgs` | ±1 wei за границей, все аргументы ошибки |
+| `test_Limit_LargeJumps_Revert_WithArgs` | ×2, ×0,5, 0,85, 1,2, 1 wei, 1e36 |
+| `test_Limit_BoundsRoundTowardStrictness` | нецелые границы: min вверх, max вниз; точные ±11% вне диапазона |
+| `test_Limit_SequentialMonths_EachFromNewValue` | каждый месяц лимит от нового значения, включая смену года |
+| `test_Limit_RejectionDoesNotBurnMonthAttempt` | после отказа в тот же день проходит; после успеха — `IndexAlreadyUpdatedThisMonth` |
+| `test_Limit_InitialIndexUnlimited` | стартовый 5e18 / 1 wei / 1e36; первый `setIndex` — от стартового |
+| `test_Limit_WorkingPriceBandFromNewIndex` | ±3% от нового индекса; лимит индекса — от индекса, не от рабочей цены |
+| `test_Limit_ConstantAndBoundsView` | константа 1100, `indexBounds`, неизвестная корзина |
+| `testFuzz_Limit_SucceedsIffWithinBounds` | проходит ⇔ в пределах ±11% (точная целочисленная проверка); при отказе — ошибка с эталонными границами; попытка не сгорает |
+
+Дополнительно:
+- `test_SetIndex_CannotJumpBetweenFullAndSuspendedInOneStep` (Boundaries) — FULL ↔ SUSPENDED одним `setIndex` невозможны.
+- `invariant_IndexChangeWithinLimit` (stateful) — handler пробует изменения от −15% до +15%. Для каждого успешного `setIndex` он независимо проверяет лимит. После каждого отказа по лимиту повторяет попытку в том же месяце, и она должна пройти.
+
+Старые тесты с большими скачками переписаны без ослабления проверок:
+
+| Тест | Как теперь |
+|---|---|
+| `test_Source_SetIndex_AllDirections` | переходы по месяцам шагами ≤ 11% (STD→FULL через 0,89 → 0,85 и т. д.) |
+| `test_Transition_ByIndexDrop` | сначала отказ 0,85 с аргументами, затем 0,89 в тот же месяц, затем 0,85 через месяц |
+| тесты 115% | индекс 1,2 за два месяца (`_setIndexStepwise`); `assertEq` на 2 шага и покрытие 100% |
+| `testFuzz_RedeemNeverLowersCoverage` | диапазон индекса 0,7–1,1 сохранён, достигается по месяцам |
+| дифференциальные и экстремальные (индекс до 1e36) | корзина создаётся сразу с нужным стартовым индексом |
+| F-05 и «AtMaxIndex» | вторая корзина со стартовым индексом 1e36 |
 
 ## 8. События
 Каждое изменение состояния выпускает событие (полный список — `SPEC.md`, раздел 4).
@@ -216,6 +268,7 @@ Aderyn и Halmos не запускались (необязательные ин�
 | # | Действие (функция) | Событие | Параметры | Тест(ы) |
 |---|---|---|---|---|
 | 1 | Обновление индекса (`setIndex`) | `IndexUpdated` | basketId↑, oldIndex, newIndex, oldWorkingPrice, year, month, timestamp | `test_Ev_IndexUpdated_OldNewYearMonthTimestamp`, `test_Ev_IndexUpdated_WithTierChange`; Oracle.t.sol: `test_SetIndex_DayBoundaries`, `test_SetIndex_YearChange_February_LeapYear_SkippedMonth` |
+| 1a | Отказ `setIndex` по лимиту ±11% (v0.4) | — (revert, событий нет) | ошибка `IndexChangeTooLarge(basketId, oldIndex, newIndex, minAllowed, maxAllowed)` | IndexLimit.t.sol: `test_Limit_Plus11PlusOneWei_Reverts_WithArgs`, `test_Limit_Minus11MinusOneWei_Reverts_WithArgs`, `test_Limit_LargeJumps_Revert_WithArgs`, `testFuzz_Limit_SucceedsIffWithinBounds` |
 | 2 | Рабочая цена (`setWorkingPrice`) | `WorkingPriceUpdated` | basketId↑, oldPrice, newPrice, index | `test_Ev_WorkingPriceUpdated_OldNewIndex`; Oracle.t.sol: `test_WorkingPrice_ExactBandAndOneWeiOutside` |
 | 3 | Смена уровня покрытия (<115 / 115–140 / ≥140) из mint, redeem, topUp, setIndex, setWorkingPrice, setManualPrice, setStableFeed, pokeTier, pokeStable | `CoverageTierChanged` | basketId↑, oldTier↑, newTier↑, coverageBps (после операции) | `test_Ev_Minted_FirstMint_FullArgs_AndTierEvent`, `test_Ev_Redeemed_RaisesTier_EmitsTierAfterRedeemed`, `test_Ev_ReserveToppedUp_WithTierChangeToFull`, `test_Ev_IndexUpdated_WithTierChange`, `test_Ev_ManualPrice_TierChangeCarriesCoverage`, `test_Ev_Depeg_ViaPokeStable_AndPokeTier`; нет события без смены уровня: `test_Ev_NoTierEvent_WhenTierUnchanged_AllSources`; Boundaries.t.sol: `test_TierEvent_CarriesCoverage`, `test_PokeTier_NoEventWhenUnchanged_AndUnknownBasket` |
 | 4 | Пауза вкл/выкл (`pause`/`unpause`) | `Paused` / `Unpaused` (OpenZeppelin, подходят) | account (кто вызвал) | `test_Ev_PauseUnpause_StandardOZEvents` |
@@ -251,12 +304,29 @@ Aderyn и Halmos не запускались (необязательные ин�
 ## 10. Оставшиеся риски и рекомендации перед деплоем
 Риски, которые остаются при текущем (зафиксированном) дизайне:
 1. **Централизация.** Один ключ owner — это:
-   - оракул (28-го индекс может быть любым);
+   - оракул: 28-го индекс можно сдвинуть до ±11% за раз (см. риск 1a);
    - пауза (можно заблокировать выход);
    - добавление стейблов (через 9 дней);
    - смена фида и ручной цены, а значит и объявление депега.
 
    Админ токена может выдать `MINTER_ROLE` кому угодно и тем самым получить неограниченную эмиссию.
+1a. **Накопленный сдвиг индекса (остаточный риск после v0.4).** Лимит ±11% ограничивает один шаг, но не сумму шагов. Owner или скомпрометированный ключ может двигать индекс в одну сторону каждый месяц:
+
+    | Месяцев | Максимальный рост | Максимальное падение |
+    |---|---|---|
+    | 2 | ×1,2321 (+23,2%) | ×0,7921 (−20,8%) |
+    | 3 | ×1,3676 (+36,8%) | ×0,7050 (−29,5%) |
+    | 6 | ×1,8704 (+87,0%) | ×0,4970 (−50,3%) |
+    | 12 | ×3,4985 (+249,8%) | ×0,2470 (−75,3%) |
+
+    К этому добавляется рабочая цена ±3% от индекса.
+
+    Что даёт лимит:
+    - резкий скачок за одну транзакцию невозможен;
+    - у держателей и мониторинга есть минимум месяц на реакцию между шагами;
+    - переход FULL ↔ SUSPENDED одним `setIndex` невозможен (140/115 ≈ 1,217 > 1,11).
+
+    Чего лимит не даёт: защиты от устойчивого многомесячного дрейфа. Против него нужны multisig и таймлок для оракула (R-1), публичный мониторинг `IndexUpdated` (R-6) и, при желании, годовой «потолок» (R-2b).
 2. **Задержка депега.** Ручная цена и фид обновляются не мгновенно. До обновления можно минтить по старой цене.
 3. **Граница 140%.** Крупный держатель может небольшим `topUp` «купить» уровень FULL для своего выкупа. Остальным это не вредит (покрытие только растёт), но стоит учесть в коммуникации.
 4. **Сэндвич вокруг смены уровня** (индекс, выкупы других). Защищает `minStableOut`, сайт обязан его передавать.
@@ -267,7 +337,8 @@ Aderyn и Halmos не запускались (необязательные ин�
 
 Рекомендации (требуют решения Антона):
 - R-1: owner — multisig (Safe) + таймлок на смену фида, ручной цены и казны.
-- R-2: лимит изменения индекса 28-го числа (например, ±10%) или двухшаговая фиксация.
+- ~~R-2: лимит изменения индекса 28-го числа~~ — **реализовано в v0.4**: ±11% за обновление, константа (раздел 7.1).
+- R-2b (новое, по желанию): ограничить и накопленное изменение. Варианты: лимит за скользящие 12 месяцев относительно «якоря», двухшаговая фиксация (объявление + исполнение через N дней) или публикация методики индекса и сверка с ней.
 - R-3: внешний аудит независимой фирмой перед деплоем с реальными средствами, после него — bug bounty.
 - R-4: staleness фида — по heartbeat конкретного фида Chainlink в целевой сети. Добавить L2 sequencer uptime feed, если сеть — L2.
 - R-5: админ `BasketToken` — тот же multisig; после настройки рассмотреть отказ от `DEFAULT_ADMIN_ROLE`.

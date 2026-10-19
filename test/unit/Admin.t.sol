@@ -158,12 +158,17 @@ contract AdminTest is BaseTest {
         vm.warp(T_OCT28);
         vm.expectRevert(BasketVault.InvalidPrice.selector);
         vault.setIndex(BASKET, 1e36 + 1);
-        vault.setIndex(BASKET, 1e36);
+        // v0.4: индекс 1e36 достижим только как стартовый (setIndex ограничен ±11%)
+        vault.addBasket(2, t2, 1e36);
+        vm.expectRevert(BasketVault.InvalidPrice.selector);
+        vault.setIndex(2, 1e36 + 1); // InvalidPrice проверяется раньше лимита
+        vault.setIndex(2, 1e36);
         vm.stopPrank();
         // view-функции не паникуют на границах
-        vault.quoteRedeem(BASKET, address(usdt), type(uint128).max);
-        vault.quoteRedeem(BASKET, address(usdc), type(uint128).max);
-        vault.collateralRatioBps(BASKET);
+        vault.quoteRedeem(2, address(usdt), type(uint128).max);
+        vault.quoteRedeem(2, address(usdc), type(uint128).max);
+        vault.collateralRatioBps(2);
+        vault.indexBounds(2);
     }
 
     // ------------------------------------------------ казна

@@ -5,6 +5,7 @@ import {BaseTest} from "./utils/BaseTest.sol";
 import {Test} from "forge-std/Test.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {BasketVault} from "../src/BasketVault.sol";
+import {BasketToken} from "../src/BasketToken.sol";
 import {DateLib} from "../src/libraries/DateLib.sol";
 import {MockStable} from "./mocks/Mocks.sol";
 
@@ -28,10 +29,22 @@ contract DifferentialRoundingTest is BaseTest {
         return (address(s18), 18);
     }
 
+    /// Индекс корзины = p. С v0.4 setIndex ограничен ±11% за обновление, поэтому для проверки
+    /// математики на произвольных индексах (1 wei .. 1e36) разворачивается свежий Vault, где корзина
+    /// создаётся сразу с индексом p (стартовый индекс лимитом не ограничен). Вызывать в начале теста.
     function _setIndex(uint256 p) internal {
-        vm.warp(T_OCT28);
-        vm.prank(owner);
-        vault.setIndex(BASKET, p);
+        vault = new BasketVault(owner, treasury, address(usdt), address(usdc), 50e18);
+        coin = new BasketToken("BasketCoin", "BSKT", owner);
+        vm.startPrank(owner);
+        coin.grantRole(coin.MINTER_ROLE(), address(vault));
+        vault.addBasket(BASKET, coin, p);
+        vm.stopPrank();
+        _fund(address(usdt));
+        _fund(address(usdc));
+        _addStableViaTimelock(address(s8));
+        _addStableViaTimelock(address(s18));
+        assertEq(_idx(BASKET), p);
+        assertEq(_wp(BASKET), p);
     }
 
     /// Минт: результат Vault == эталон одной точной делёжкой floor(net*scale*min(p,1)*1e4 / (P*12000)).
@@ -66,13 +79,13 @@ contract DifferentialRoundingTest is BaseTest {
         tokens = bound(tokens, 1e12, 1e30);
         pBps = bound(pBps, 9_500, 10_500);
         index = bound(index, 1e9, 1e24);
+        _setIndex(index);
         // корзина с огромным резервом, чтобы уровень FULL/STANDARD задавался флагом
         MockStable(st).mint(owner, type(uint128).max);
         vm.prank(owner);
         MockStable(st).approve(address(vault), type(uint256).max);
         vm.prank(address(vault));
         coin.mint(alice, tokens); // эмулируем выпуск (vault — минтер)
-        _setIndex(index);
         vm.prank(owner);
         vault.setManualPrice(st, pBps * 1e14);
         uint256 usdValue = Math.mulDiv(tokens, index, 1e18);
@@ -95,11 +108,11 @@ contract DifferentialRoundingTest is BaseTest {
         amount = bound(amount, 50e6, 1e15 * 1e6);
         extra = bound(extra, 0, 1e15 * 1e6);
         index = bound(index, 1e12, 1e24);
+        _setIndex(index);
         usdt.mint(alice, amount);
         usdc.mint(owner, extra);
         _mint(alice, address(usdt), amount);
         _topUp(address(usdc), extra);
-        _setIndex(index);
         uint256 usd = (vault.reserves(BASKET, address(usdt)) + vault.reserves(BASKET, address(usdc))) * 1e12;
         uint256 exact = Math.mulDiv(usd, 1e22, index * coin.totalSupply());
         uint256 c = _cov();
@@ -113,12 +126,12 @@ contract DifferentialRoundingTest is BaseTest {
     {
         amount = bound(amount, 50e18, 1e40); // 18 знаков, до 1e22 «долларов»
         index = bound(index, 1, 1e36);
+        _setIndex(index);
         pBps = bound(pBps, 9_500, 10_500);
         redeemFrac = bound(redeemFrac, 1, 10_000);
         s18.mint(alice, amount);
         vm.prank(alice);
         s18.approve(address(vault), type(uint256).max);
-        _setIndex(index);
         vm.prank(owner);
         vault.setManualPrice(address(s18), pBps * 1e14);
 

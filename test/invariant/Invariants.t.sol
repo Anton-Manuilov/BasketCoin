@@ -85,6 +85,8 @@ abstract contract InvariantBase is Test {
                 );
             }
         }
+        vm.writeLine(path, string.concat("metric:indexUpdatesChecked,", vm.toString(handler.indexUpdatesChecked()), ",0"));
+        vm.writeLine(path, string.concat("metric:indexLimitRejections,", vm.toString(handler.indexLimitRejections()), ",0"));
         console.log(tag, "run calls/ok:", totalCalls, totalOk);
     }
 }
@@ -149,6 +151,14 @@ contract VaultInvariants is InvariantBase {
     /// 9. Депег стейбла — ни один минт/выкуп по нему не прошёл.
     function invariant_NothingWhileDepegged() public view {
         assertEq(handler.vSuccessWhileDepegged(), 0);
+    }
+
+    /// 11. Каждое прошедшее обновление индекса — в пределах ±11% от предыдущего; отказ по лимиту
+    ///     бывает только за пределами ±11% и не расходует попытку месяца.
+    function invariant_IndexChangeWithinLimit() public view {
+        assertEq(handler.vIndexChangeOutOfLimit(), 0, "setIndex beyond +-11% succeeded");
+        assertEq(handler.vIndexWrongfullyRejected(), 0, "in-limit setIndex rejected");
+        assertEq(handler.vIndexAttemptBurned(), 0, "rejected attempt burned the month");
     }
 
     /// 10. Уровень всегда соответствует покрытию (redeemTier и сохранённый lastTier).
