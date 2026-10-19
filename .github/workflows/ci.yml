@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+permissions:
+  contents: read
+  security-events: write
+
+env:
+  FOUNDRY_PROFILE: ci
+
+jobs:
+  foundry:
+    name: Build, test, coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.8.5
+
+      - name: Build
+        run: forge build --sizes
+
+      - name: Lint
+        run: forge lint
+
+      - name: Test (ci profile — fuzz 10000, invariant 1000 x 200)
+        run: forge test
+
+      - name: Coverage
+        run: forge coverage --report summary --report lcov --no-match-coverage '(test|lib|script)/'
+
+      - name: Upload lcov
+        uses: actions/upload-artifact@v4
+        with:
+          name: lcov
+          path: lcov.info
+
+  slither:
+    name: Slither
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Run Slither
+        uses: crytic/slither-action@v0.4.1
+        with:
+          fail-on: medium
+          slither-args: --filter-paths "lib/|test/"

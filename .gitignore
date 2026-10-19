@@ -1,0 +1,22 @@
+# Foundry
+out/
+cache/
+broadcast/
+lcov.info
+coverage/
+# Локальная статистика инвариантов (генерируется тестами)
+invariant-stats/*
+!invariant-stats/.gitkeep
+# Python / инструменты анализа
+.venv*/
+__pycache__/
+crytic-export/
+slither.json
+# Секреты и окружение
+.env
+.env.*
+*.key
+# ОС/редакторы
+.DS_Store
+.idea/
+.vscode/
