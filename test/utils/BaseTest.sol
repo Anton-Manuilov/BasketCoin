@@ -24,7 +24,7 @@ abstract contract BaseTest is Test {
     uint256 internal constant T_MAR28_2028 = 1837814400; // 2028-03-28 00:00:00
     uint256 internal constant BASKET = 1;
 
-    address internal owner = makeAddr("anton");
+    address internal owner = makeAddr("owner");
     address internal treasury = makeAddr("treasury");
     address internal alice = makeAddr("alice");
     address internal bob = makeAddr("bob");
