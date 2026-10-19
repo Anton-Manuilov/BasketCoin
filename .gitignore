@@ -20,3 +20,12 @@ slither.json
 .DS_Store
 .idea/
 .vscode/
+# Деплой: локальные/пробные прогоны (anvil, симуляции) не коммитим; deployments/base-sepolia.json — коммитим
+broadcast/*/31337/
+deployments/*.local.json
+deployments/31337.json
+# Любые секреты
+.secrets/
+*.pem
+*.keystore
+keystore/

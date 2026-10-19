@@ -65,6 +65,7 @@ src/
   BasketToken.sol          ERC20 корзины (mint/burn только MINTER_ROLE = Vault)
   libraries/DateLib.sol    timestamp → дата UTC
   interfaces/IAggregatorV3.sol
+  testnet/TestStablecoins.sol  ТОЛЬКО ТЕСТНЕТ: TestUSDT/TestUSDC (6 знаков, открытый кран ≤ 10 000 за вызов)
 test/
   unit/                    граничные случаи, оракул, лимит индекса, минт/выкуп, права и события
   invariant/               handler + stateful-инварианты
@@ -72,6 +73,11 @@ test/
   Reentrancy.t.sol         атака через токен с хуками
   BasketVault.t.sol, RedeemTiers.t.sol — базовые сценарии
 script/invariant_stats.py  сводка откатов по действиям handler'а
+script/Deploy.s.sol        деплой тестнет-набора (Base Sepolia) → deployments/base-sepolia.json
+script/UpdateIndex.s.sol   ежемесячный setIndex с проверками до отправки
+script/verify.sh           верификация на Blockscout/Sourcify без API-ключа
+script/dry-run-anvil.sh    сухой прогон деплоя и операций на локальном форке Base Sepolia
+docs/OPERATIONS.md         деплой, индекс, пауза, цены, владение, подписи (Ledger / MetaMask / Safe)
 ```
 
 ## Запуск
@@ -85,6 +91,10 @@ slither . --filter-paths "lib/|test/"
 python3 script/invariant_stats.py          # после прогона инвариантов (нужен pycryptodome)
 ```
 Требуется Foundry ≥ 1.8 (проверено на forge 1.8.5), solc 0.8.24.
+
+## Тестнет (Base Sepolia)
+Деплой, верификация и операции владельца описаны в [docs/OPERATIONS.md](docs/OPERATIONS.md).
+На тестнете вместо USDT/USDC используются TestUSDT/TestUSDC с открытым краном (`faucet(uint256)`, до 10 000 за вызов).
 
 ## Лицензия
 **Не решено.** В файлах стоит `SPDX-License-Identifier: MIT` (как при создании), но файла `LICENSE` нет — нужно решение Антона перед публикацией.
