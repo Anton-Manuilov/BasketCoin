@@ -11,7 +11,9 @@
   "feeRecipient": "0x54534F6EE2Da9dC9fb06d64617CE9301253E0F06",
   "initialIndex": 1665800000000000000,
   "minMintUsd": "50000000000000000000",
+  "status": "active",
   "tokenAdmin": "0x54534F6EE2Da9dC9fb06d64617CE9301253E0F06",
+  "tokenSymbol": "BKT",
   "vaultOwner": "0xD54Fe7916D5f29c978A450d2F505791B2e2b3190",
   "vaultPendingOwner": "0x54534F6EE2Da9dC9fb06d64617CE9301253E0F06"
 }

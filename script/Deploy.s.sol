@@ -128,6 +128,7 @@ contract Deploy is Script {
         vm.serializeUint(k, "basketId", c.basketId);
         vm.serializeUint(k, "initialIndex", c.initialIndex);
         vm.serializeUint(k, "minMintUsd", c.minMintUsd);
+        vm.serializeString(k, "tokenSymbol", BasketToken(d.token).symbol());
         vm.serializeAddress(k, "TestUSDT", d.usdt);
         vm.serializeAddress(k, "TestUSDC", d.usdc);
         vm.serializeAddress(k, "BasketToken", d.token);

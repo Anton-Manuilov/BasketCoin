@@ -1,7 +1,7 @@
 # BasketCoin — смарт-контракты
 
 > **Статус:** прототип. Прошёл только внутреннюю проверку (см. [`AUDIT_REPORT.md`](AUDIT_REPORT.md)).
-> Внешнего аудита не было. Ни в одну сеть не деплоился. Не использовать с реальными средствами.
+> Внешнего аудита не было. Развёрнут только в тестнете Base Sepolia (токен **BKT**), в основных сетях не деплоился. Не использовать с реальными средствами.
 
 BasketCoin — токен, цена которого следует индексу корзины. Индекс задаёт оракул (ключ владельца) раз в месяц, 28-го числа по UTC.
 Токен выпускается под залог стейблкоинов (USDT/USDC) с избыточным обеспечением 120% и выкупается обратно по трёхуровневой схеме.
@@ -96,13 +96,25 @@ python3 script/invariant_stats.py          # после прогона инва�
 Деплой, верификация и операции владельца описаны в [docs/OPERATIONS.md](docs/OPERATIONS.md).
 На тестнете вместо USDT/USDC используются TestUSDT/TestUSDC с открытым краном (`faucet(uint256)`, до 10 000 за вызов).
 
+Текущий набор (chainId 84532, стартовый индекс 1,6658; адреса — в [deployments/base-sepolia.json](deployments/base-sepolia.json)):
+
+| Контракт | Адрес |
+|---|---|
+| BasketVault | [`0xF6b93f9124d24AadEe6d38b9a925d220d731B4d6`](https://base-sepolia.blockscout.com/address/0xF6b93f9124d24AadEe6d38b9a925d220d731B4d6) |
+| BasketToken (**BKT**) | [`0x2E72B4D6E2d611E6a193287D0736DfAabddDB062`](https://base-sepolia.blockscout.com/address/0x2E72B4D6E2d611E6a193287D0736DfAabddDB062) |
+| TestUSDT (tUSDT) | [`0xa4A663A60d82C787B68378Ec2678108F548F1A97`](https://base-sepolia.blockscout.com/address/0xa4A663A60d82C787B68378Ec2678108F548F1A97) |
+| TestUSDC (tUSDC) | [`0x986e5514393518DFB98Fed36c447174D46730545`](https://base-sepolia.blockscout.com/address/0x986e5514393518DFB98Fed36c447174D46730545) |
+
+Файлы `deployments/base-sepolia-v1-index1.json` и `deployments/base-sepolia-v2.json` — устаревшие пробные наборы
+(`"status": "deprecated"`), не используйте их.
+
 ## Лицензия
 **Не решено.** В файлах стоит `SPDX-License-Identifier: MIT` (как при создании), но файла `LICENSE` нет — нужно решение Антона перед публикацией.
 
 ---
 
 ## English summary (for auditors)
-**Status:** prototype, internal review only — **not externally audited**, never deployed.
+**Status:** prototype, internal review only — **not externally audited**. Deployed on Base Sepolia testnet only (token symbol **BKT**, addresses in `deployments/base-sepolia.json`); never deployed to mainnet.
 
 - `BasketVault` holds stablecoin collateral per (basket, stable) pair and mints/burns `BasketToken`s at the owner-set working price.
 - The owner is the oracle. The index can be set only on the 28th (UTC), at most once per calendar month.

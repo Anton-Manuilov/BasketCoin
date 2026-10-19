@@ -11,7 +11,10 @@
   "feeRecipient": "0x54534F6EE2Da9dC9fb06d64617CE9301253E0F06",
   "initialIndex": 1000000000000000000,
   "minMintUsd": "50000000000000000000",
+  "note": "Historical v1 set (initial index 1.00). On-chain token symbol is BSKT; superseded by deployments/base-sepolia.json (BKT). Do not use.",
+  "status": "deprecated",
   "tokenAdmin": "0x54534F6EE2Da9dC9fb06d64617CE9301253E0F06",
+  "tokenSymbol": "BSKT",
   "vaultOwner": "0xD54Fe7916D5f29c978A450d2F505791B2e2b3190",
   "vaultPendingOwner": "0x54534F6EE2Da9dC9fb06d64617CE9301253E0F06"
 }
