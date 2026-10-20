@@ -1,0 +1,12 @@
+# forge coverage --report summary --no-match-coverage '(test|lib|script)/'
+# commit bdfada3, forge 1.8.5, solc 0.8.24
+| File                            | % Lines           | % Statements     | % Branches     | % Funcs         |
+| src/BasketToken.sol             | 100.00% (7/7)     | 100.00% (4/4)    | 100.00% (2/2)  | 100.00% (3/3)   |
+| src/BasketVault.sol             | 100.00% (319/319) | 99.49% (391/393) | 96.77% (60/62) | 100.00% (54/54) |
+| src/libraries/DateLib.sol       | 100.00% (14/14)   | 100.00% (27/27)  | 100.00% (3/3)  | 100.00% (1/1)   |
+| src/testnet/TestStablecoins.sol | 100.00% (9/9)     | 100.00% (7/7)    | 100.00% (1/1)  | 100.00% (5/5)   |
+| Total                           | 100.00% (349/349) | 99.54% (429/431) | 97.06% (66/68) | 100.00% (63/63) |
+
+# Непокрытые ветви (lcov BRDA с 0 срабатываний):
+src/BasketVault.sol:572
+src/BasketVault.sol:793

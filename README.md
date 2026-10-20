@@ -77,6 +77,7 @@ script/Deploy.s.sol        деплой тестнет-набора (Base Sepoli
 script/UpdateIndex.s.sol   ежемесячный setIndex с проверками до отправки
 script/verify.sh           верификация на Blockscout/Sourcify без API-ключа
 script/dry-run-anvil.sh    сухой прогон деплоя и операций на локальном форке Base Sepolia
+docs/AUDIT_PACKAGE/        пакет для внешнего аудита (модель угроз, роли, методика, покрытие/Slither, мультисиг, аудиторы)
 docs/OPERATIONS.md         деплой, индекс, пауза, цены, владение, подписи (Ledger / MetaMask / Safe)
 ```
 

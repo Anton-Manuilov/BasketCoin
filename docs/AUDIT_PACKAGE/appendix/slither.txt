@@ -1,0 +1,67 @@
+# slither . --filter-paths 'lib/|test/|script/' --exclude-dependencies
+# slither 0.11.6, commit bdfada3
+## [Low/Medium] calls-loop
+BasketVault._coverageBps(uint256) (src/BasketVault.sol#935-953) has external calls inside a loop: supply = b.token.totalSupply() (src/BasketVault.sol#938)
+	Calls stack containing the loop:
+		BasketVault.setStableFeed(address,IAggregatorV3,uint256)
+		BasketVault._syncAllTiers()
+		BasketVault._syncTier(uint256)
+
+## [Low/Medium] calls-loop
+BasketVault._coverageBps(uint256) (src/BasketVault.sol#935-953) has external calls inside a loop: supply = b.token.totalSupply() (src/BasketVault.sol#938)
+	Calls stack containing the loop:
+		BasketVault.pokeStable(address)
+		BasketVault._syncAllTiers()
+		BasketVault._syncTier(uint256)
+
+## [Low/Medium] calls-loop
+BasketVault._coverageBps(uint256) (src/BasketVault.sol#935-953) has external calls inside a loop: supply = b.token.totalSupply() (src/BasketVault.sol#938)
+	Calls stack containing the loop:
+		BasketVault.setManualPrice(address,uint256)
+		BasketVault._syncAllTiers()
+		BasketVault._syncTier(uint256)
+
+## [Low/Medium] reentrancy-benign
+Reentrancy in BasketVault.redeem(uint256,address,uint256,uint256) (src/BasketVault.sol#634-661):
+	External calls:
+	- b.token.burn(msg.sender,tokenAmount) (src/BasketVault.sol#653)
+	State variables written after the call(s):
+	- _syncDepeg(stable,lg.stablePrice) (src/BasketVault.sol#657)
+		- lastDepegged[stable] = now_ (src/BasketVault.sol#987)
+	- _syncTierAt(basketId,lg.coverageAfter) (src/BasketVault.sol#660)
+		- lastTier[basketId] = newTier (src/BasketVault.sol#970)
+
+## [Low/Medium] reentrancy-benign
+Reentrancy in BasketVault.mint(uint256,address,uint256,uint256) (src/BasketVault.sol#548-585):
+	External calls:
+	- b.token.mint(msg.sender,tokensOut) (src/BasketVault.sol#579)
+	State variables written after the call(s):
+	- _syncDepeg(stable,lg.stablePrice) (src/BasketVault.sol#581)
+		- lastDepegged[stable] = now_ (src/BasketVault.sol#987)
+	- _syncTierAt(basketId,lg.coverageAfter) (src/BasketVault.sol#584)
+		- lastTier[basketId] = newTier (src/BasketVault.sol#970)
+
+## [Low/Medium] timestamp
+BasketVault._readFeed(address,uint256) (src/BasketVault.sol#833-852) uses timestamp for comparisons
+	Dangerous comparisons:
+	- updatedAt == 0 || updatedAt > block.timestamp || block.timestamp - updatedAt > maxStaleness (src/BasketVault.sol#845)
+
+## [Low/Medium] timestamp
+BasketVault.executeStable(address) (src/BasketVault.sol#453-461) uses timestamp for comparisons
+	Dangerous comparisons:
+	- block.timestamp < p.executeAfter (src/BasketVault.sol#457)
+
+## [Low/Medium] timestamp
+BasketVault.setIndex(uint256,uint256) (src/BasketVault.sol#392-416) uses timestamp for comparisons
+	Dangerous comparisons:
+	- d != INDEX_UPDATE_DAY (src/BasketVault.sol#396)
+	- b.lastIndexMonthKey == key (src/BasketVault.sol#399)
+
+## [Informational/High] assembly
+BasketVault._staticcallWords5(address,bytes4) (src/BasketVault.sol#855-866) uses assembly
+	- INLINE ASM (src/BasketVault.sol#861-865)
+
+## [Informational/High] assembly
+BasketVault._staticcallWord(address,bytes4) (src/BasketVault.sol#869-881) uses assembly
+	- INLINE ASM (src/BasketVault.sol#875-880)
+
