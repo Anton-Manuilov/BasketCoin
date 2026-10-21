@@ -1,0 +1,20 @@
+{
+  "BasketToken": "0x2E72B4D6E2d611E6a193287D0736DfAabddDB062",
+  "BasketVault": "0xF6b93f9124d24AadEe6d38b9a925d220d731B4d6",
+  "TestUSDC": "0x986e5514393518DFB98Fed36c447174D46730545",
+  "TestUSDT": "0xa4A663A60d82C787B68378Ec2678108F548F1A97",
+  "basketId": 1,
+  "chainId": 84532,
+  "deployedAtBlock": 48327718,
+  "deployedAtTimestamp": 1792423724,
+  "deployer": "0xD54Fe7916D5f29c978A450d2F505791B2e2b3190",
+  "feeRecipient": "0x54534F6EE2Da9dC9fb06d64617CE9301253E0F06",
+  "initialIndex": 1665800000000000000,
+  "minMintUsd": "50000000000000000000",
+  "status": "deprecated",
+  "tokenAdmin": "0x54534F6EE2Da9dC9fb06d64617CE9301253E0F06",
+  "tokenSymbol": "BKT",
+  "vaultOwner": "0xD54Fe7916D5f29c978A450d2F505791B2e2b3190",
+  "vaultPendingOwner": "0x54534F6EE2Da9dC9fb06d64617CE9301253E0F06",
+  "deprecatedReason": "replaced by v4 (stage B: guardian, timelock, sequencer check); code before ab144a7"
+}

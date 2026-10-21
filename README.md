@@ -97,17 +97,18 @@ python3 script/invariant_stats.py          # после прогона инва�
 Деплой, верификация и операции владельца описаны в [docs/OPERATIONS.md](docs/OPERATIONS.md).
 На тестнете вместо USDT/USDC используются TestUSDT/TestUSDC с открытым краном (`faucet(uint256)`, до 10 000 за вызов).
 
-Текущий набор (chainId 84532, стартовый индекс 1,6658; адреса — в [deployments/base-sepolia.json](deployments/base-sepolia.json)):
+Текущий набор **v4** — код этапа B (коммит `ab144a7`: guardian паузы, таймлок админских функций, проверка L2 sequencer);
+chainId 84532, стартовый индекс 1,6658; адреса — в [deployments/base-sepolia.json](deployments/base-sepolia.json):
 
 | Контракт | Адрес |
 |---|---|
-| BasketVault | [`0xF6b93f9124d24AadEe6d38b9a925d220d731B4d6`](https://base-sepolia.blockscout.com/address/0xF6b93f9124d24AadEe6d38b9a925d220d731B4d6) |
-| BasketToken (**BKT**) | [`0x2E72B4D6E2d611E6a193287D0736DfAabddDB062`](https://base-sepolia.blockscout.com/address/0x2E72B4D6E2d611E6a193287D0736DfAabddDB062) |
-| TestUSDT (tUSDT) | [`0xa4A663A60d82C787B68378Ec2678108F548F1A97`](https://base-sepolia.blockscout.com/address/0xa4A663A60d82C787B68378Ec2678108F548F1A97) |
-| TestUSDC (tUSDC) | [`0x986e5514393518DFB98Fed36c447174D46730545`](https://base-sepolia.blockscout.com/address/0x986e5514393518DFB98Fed36c447174D46730545) |
+| BasketVault | [`0xD96942ab46AE1460A6bf0cD33963403423DDcB0E`](https://base-sepolia.blockscout.com/address/0xD96942ab46AE1460A6bf0cD33963403423DDcB0E) |
+| BasketToken (**BKT**) | [`0x62D367D5f4DbB40767Fa7d108e7B2D2574EAc45D`](https://base-sepolia.blockscout.com/address/0x62D367D5f4DbB40767Fa7d108e7B2D2574EAc45D) |
+| TestUSDT (tUSDT) | [`0x28817df0F488Ef890bB49Ee24bb2E69F8151d0eC`](https://base-sepolia.blockscout.com/address/0x28817df0F488Ef890bB49Ee24bb2E69F8151d0eC) |
+| TestUSDC (tUSDC) | [`0xbDf42A6F51Ea8839a3e2d4d64163628aD8EF1ED3`](https://base-sepolia.blockscout.com/address/0xbDf42A6F51Ea8839a3e2d4d64163628aD8EF1ED3) |
 
-Файлы `deployments/base-sepolia-v1-index1.json` и `deployments/base-sepolia-v2.json` — устаревшие пробные наборы
-(`"status": "deprecated"`), не используйте их.
+Файлы `deployments/base-sepolia-v1-index1.json`, `deployments/base-sepolia-v2.json` и `deployments/base-sepolia-v3.json`
+(v3 — код до этапа B) — устаревшие наборы (`"status": "deprecated"`), не используйте их.
 
 ## Лицензия
 **Не решено.** В файлах стоит `SPDX-License-Identifier: MIT` (как при создании), но файла `LICENSE` нет — нужно решение Антона перед публикацией.

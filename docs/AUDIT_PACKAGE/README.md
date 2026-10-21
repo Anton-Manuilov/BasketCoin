@@ -56,6 +56,6 @@ slither . --filter-paths "lib/|test/|script/" --exclude-dependencies
 ```
 
 ## Тестнет (Base Sepolia, chainId 84532)
-Vault `0xF6b93f9124d24AadEe6d38b9a925d220d731B4d6`, токен BKT `0x2E72B4D6E2d611E6a193287D0736DfAabddDB062`
-(верифицированы на Blockscout и Sourcify; см. `deployments/base-sepolia.json`). Это набор v3 из кода **до этапа B**;
-для проверки этапа B нужен новый тестнет-набор v4.
+Набор v4 из замороженного коммита `ab144a7`: Vault `0xD96942ab46AE1460A6bf0cD33963403423DDcB0E`, токен BKT `0x62D367D5f4DbB40767Fa7d108e7B2D2574EAc45D`,
+TestUSDT `0x28817df0F488Ef890bB49Ee24bb2E69F8151d0eC`, TestUSDC `0xbDf42A6F51Ea8839a3e2d4d64163628aD8EF1ED3` (верифицированы на Blockscout; см. `deployments/base-sepolia.json`).
+Набор v3 (`deployments/base-sepolia-v3.json`) собран из кода до этапа B и устарел.
