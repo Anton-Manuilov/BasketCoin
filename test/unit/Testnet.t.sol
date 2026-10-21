@@ -72,6 +72,8 @@ contract TestnetTest is Test {
                     deployerPk: pk,
                     owner: owner,
                     feeRecipient: makeAddr("treasury"),
+                    guardian: makeAddr("guardian"),
+                    sequencerUptimeFeed: address(0),
                     minMintUsd: 50e18,
                     initialIndex: 1e18,
                     basketId: 1,
@@ -92,8 +94,11 @@ contract TestnetTest is Test {
         BasketToken token = BasketToken(d.token);
         assertEq(vault.owner(), deployer);
         assertEq(vault.pendingOwner(), address(0));
-        assertTrue(token.hasRole(token.DEFAULT_ADMIN_ROLE(), deployer));
+        assertTrue(token.hasRole(token.DEFAULT_ADMIN_ROLE(), d.vault));
+        assertFalse(token.hasRole(token.DEFAULT_ADMIN_ROLE(), deployer));
         assertTrue(token.hasRole(token.MINTER_ROLE(), d.vault));
+        assertEq(vault.guardian(), makeAddr("guardian"));
+        assertEq(vault.sequencerUptimeFeed(), address(0));
         assertEq(vault.feeRecipient(), makeAddr("treasury"));
         assertEq(vault.minMintUsd(), 50e18);
         assertEq(token.symbol(), "BKT");
@@ -110,7 +115,8 @@ contract TestnetTest is Test {
         BasketToken token = BasketToken(d.token);
         assertEq(vault.owner(), deployer);
         assertEq(vault.pendingOwner(), newOwner);
-        assertTrue(token.hasRole(token.DEFAULT_ADMIN_ROLE(), newOwner));
+        assertTrue(token.hasRole(token.DEFAULT_ADMIN_ROLE(), d.vault));
+        assertFalse(token.hasRole(token.DEFAULT_ADMIN_ROLE(), newOwner));
         assertFalse(token.hasRole(token.DEFAULT_ADMIN_ROLE(), deployer));
         vm.prank(newOwner);
         vault.acceptOwnership();

@@ -12,7 +12,7 @@ contract OracleTest is BaseTest {
 
     function _useFeed(uint8 dec, int256 answer) internal {
         feed = new MockFeed(dec, answer);
-        vm.prank(owner);
+        vm.prank(address(vault));
         vault.setStableFeed(address(usdt), IAggregatorV3(address(feed)), 1 days);
     }
 
@@ -56,18 +56,36 @@ contract OracleTest is BaseTest {
 
     function test_DepegBounds_Manual_OneWei() public {
         vm.startPrank(owner);
+        vm.stopPrank();
+        vm.prank(address(vault));
         vault.setManualPrice(address(usdt), 0.95e18);
+        vm.startPrank(owner);
         assertFalse(vault.isDepegged(address(usdt)));
+        vm.stopPrank();
+        vm.prank(address(vault));
         vault.setManualPrice(address(usdt), 0.95e18 - 1);
+        vm.startPrank(owner);
         assertTrue(vault.isDepegged(address(usdt)));
+        vm.stopPrank();
+        vm.prank(address(vault));
         vault.setManualPrice(address(usdt), 1.05e18);
+        vm.startPrank(owner);
         assertFalse(vault.isDepegged(address(usdt)));
+        vm.stopPrank();
+        vm.prank(address(vault));
         vault.setManualPrice(address(usdt), 1.05e18 + 1);
+        vm.startPrank(owner);
         assertTrue(vault.isDepegged(address(usdt)));
+        vm.stopPrank();
+        vm.prank(address(vault));
         vm.expectRevert(BasketVault.InvalidPrice.selector);
         vault.setManualPrice(address(usdt), 0);
+        vm.startPrank(owner);
+        vm.stopPrank();
+        vm.prank(address(vault));
         vm.expectRevert(abi.encodeWithSelector(BasketVault.StableNotEnabled.selector, address(0x99)));
         vault.setManualPrice(address(0x99), 1e18);
+        vm.startPrank(owner);
         vm.stopPrank();
     }
 
@@ -83,7 +101,7 @@ contract OracleTest is BaseTest {
 
     function test_Feed_ZeroStalenessOnlySameBlock() public {
         feed = new MockFeed(8, 0.97e8);
-        vm.prank(owner);
+        vm.prank(address(vault));
         vault.setStableFeed(address(usdt), IAggregatorV3(address(feed)), 0);
         assertEq(vault.stablePrice(address(usdt)), 0.97e18);
         vm.warp(block.timestamp + 1);
@@ -122,14 +140,14 @@ contract OracleTest is BaseTest {
         _useFeed(8, 1e8);
         feed.setBroken(true);
         assertEq(vault.stablePrice(address(usdt)), 1e18);
-        vm.prank(owner);
+        vm.prank(address(vault));
         vault.setManualPrice(address(usdt), 0.9e18); // ручной депег действует при упавшем фиде
         assertTrue(vault.isDepegged(address(usdt)));
     }
 
     function test_Feed_Disable() public {
         _useFeed(8, 0.97e8);
-        vm.prank(owner);
+        vm.prank(address(vault));
         vault.setStableFeed(address(usdt), IAggregatorV3(address(0)), 0);
         assertEq(vault.stablePrice(address(usdt)), 1e18);
     }
@@ -257,15 +275,22 @@ contract OracleTest is BaseTest {
 /// Регрессии F-02/F-03: невалидные/враждебные фиды не должны ломать Vault (DoS).
 contract FeedDoSRegressionTest is BaseTest {
     function _setFeed(address f) internal {
-        vm.prank(owner);
+        vm.prank(address(vault));
         vault.setStableFeed(address(usdt), IAggregatorV3(f), 1 days);
     }
 
+    /// @dev Этап B (строгий фид): view и покрытие откатываются на ручную цену, а mint/redeem в стейбле
+    ///      со сломанным фидом ревертят FeedUnavailable (без DoS по газу); другой стейбл работает.
     function _assertVaultAlive() internal {
         assertEq(vault.stablePrice(address(usdt)), 1e18, "fallback to manual");
-        uint256 t = _mint(alice, address(usdt), 100e6);
-        _mint(bob, address(usdc), 100e6);
-        _redeem(alice, address(usdc), t);
+        uint256 t = _mint(bob, address(usdc), 200e6);
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(BasketVault.FeedUnavailable.selector, address(usdt)));
+        vault.mint(BASKET, address(usdt), 100e6, 0);
+        vm.prank(bob);
+        vm.expectRevert(abi.encodeWithSelector(BasketVault.FeedUnavailable.selector, address(usdt)));
+        vault.redeem(BASKET, address(usdt), t / 2, 0);
+        _redeem(bob, address(usdc), t / 2);
         vault.collateralRatioBps(BASKET);
     }
 

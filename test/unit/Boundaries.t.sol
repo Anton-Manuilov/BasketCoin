@@ -248,17 +248,17 @@ contract BoundariesTest is BaseTest {
     function test_Source_ManualPrice_BothWays() public {
         _mint(alice, address(usdt), 1_000e6);
         _expectTier(BASKET, STD, SUS);
-        vm.prank(owner);
+        vm.prank(address(vault));
         vault.setManualPrice(address(usdt), 0.955e18); // 114.6%
         _expectTier(BASKET, SUS, STD);
-        vm.prank(owner);
+        vm.prank(address(vault));
         vault.setManualPrice(address(usdt), 1e18);
         _topUpTo(14_200, address(usdc));
         _expectTier(BASKET, FULL, STD);
-        vm.prank(owner);
+        vm.prank(address(vault));
         vault.setManualPrice(address(usdt), 0.96e18);
         _expectTier(BASKET, STD, FULL);
-        vm.prank(owner);
+        vm.prank(address(vault));
         vault.setManualPrice(address(usdt), 1.04e18); // выше $1 — в покрытии всё равно $1
     }
 
@@ -267,7 +267,7 @@ contract BoundariesTest is BaseTest {
         _mint(alice, address(usdt), 1_000e6);
         MockFeed feed = new MockFeed(8, 0.955e8);
         _expectTier(BASKET, STD, SUS);
-        vm.prank(owner);
+        vm.prank(address(vault));
         vault.setStableFeed(address(usdt), IAggregatorV3(address(feed)), 1 hours); // смена фида синхронизирует
         feed.set(1e8, block.timestamp);
         _expectTier(BASKET, SUS, STD);

@@ -37,8 +37,12 @@ export OWNER=0x...        # владелец Vault (оракул)
 
 ```bash
 set -a; . /home/box/.secrets/basketcoin-deployer.env; set +a
-# OWNER_ADDRESS — владелец/оракул; FEE_RECIPIENT по умолчанию = OWNER_ADDRESS (без обоих — адрес деплоера)
-OWNER_ADDRESS=0x54534F6EE2Da9dC9fb06d64617CE9301253E0F06 \
+# OWNER_ADDRESS    — владелец/оракул (в mainnet — Safe 2-of-3); FEE_RECIPIENT по умолчанию = OWNER_ADDRESS
+# GUARDIAN_ADDRESS — отдельный адрес, который может только поставить паузу (по умолчанию — нет)
+# SEQUENCER_UPTIME_FEED — Chainlink L2 Sequencer Uptime Feed; в тестнете 0 (по умолчанию),
+#                    в Base mainnet — только адрес из официальной документации Chainlink
+#                    (на 19.10.2026: 0xBCF85224fc0756B9Fa45aA7892530B47e10b6433 — сверить перед деплоем)
+OWNER_ADDRESS=<SAFE_ИЛИ_EOA> GUARDIAN_ADDRESS=<GUARDIAN> SEQUENCER_UPTIME_FEED=0x0000000000000000000000000000000000000000 \
   forge script script/Deploy.s.sol --rpc-url $RPC --broadcast --slow
 ```
 
@@ -50,14 +54,14 @@ OWNER_ADDRESS=0x54534F6EE2Da9dC9fb06d64617CE9301253E0F06 script/dry-run-anvil.sh
 
 Скрипт деплоит TestUSDT, TestUSDC, BasketToken (BKT), BasketVault, выдаёт Vault роль `MINTER_ROLE`,
 создаёт корзину `1` со стартовым индексом `1.00` и записывает адреса в `deployments/base-sepolia.json`.
-Фидов у стейблов нет: Vault использует ручную цену `$1` (её можно менять, см. §6).
+Фидов у стейблов нет: Vault использует ручную цену `$1` (меняется через таймлок, §6a).
 
-Если `OWNER_ADDRESS` отличается от деплоера:
-- **Vault** (Ownable2Step): скрипт вызывает `transferOwnership(OWNER)`. Владельцем остаётся деплоер,
-  пока OWNER не вызовет `acceptOwnership()` (§7). Проверка: `cast call $VAULT "pendingOwner()(address)" --rpc-url $RPC`.
-- **BasketToken** (AccessControl): скрипт выдаёт OWNER `DEFAULT_ADMIN_ROLE`, а деплоер отказывается от неё
-  (`renounceRole`). Это одношаговая передача — дважды проверьте `OWNER_ADDRESS` (для Safe — адрес Safe на Base Sepolia).
-  `MINTER_ROLE` у Vault остаётся.
+Передача прав:
+- **Vault** (Ownable2Step): если `OWNER_ADDRESS` ≠ деплоер, скрипт вызывает `transferOwnership(OWNER)`. Владельцем остаётся
+  деплоер, пока OWNER не вызовет `acceptOwnership()` (§7). Проверка: `cast call $VAULT "pendingOwner()(address)" --rpc-url $RPC`.
+- **BasketToken** (AccessControl): `DEFAULT_ADMIN_ROLE` всегда получает **сам Vault**, деплоер от неё отказывается.
+  Дальше роли токена меняются только через таймлок Vault (`setTokenRole`, 7 дней, §6a). `MINTER_ROLE` — у Vault.
+- `guardian` и `sequencerUptimeFeed` задаются в конструкторе; скрипт проверяет их после деплоя и пишет в JSON.
 
 Сухая проверка без отправки: та же команда без `--broadcast` и с `DEPLOYMENTS_FILE=deployments/sim.local.json`
 (иначе симуляция перезапишет `deployments/base-sepolia.json` предсказанными адресами). Для симуляции у деплоера
@@ -141,18 +145,43 @@ cast send $VAULT "setWorkingPrice(uint256,uint256)" 1 $(cast to-wei 1.0300) --rp
 ```
 Допустимо `index × 0,97 ≤ price ≤ index × 1,03` (включительно), иначе `PriceOutOfBand`. В любой день месяца.
 
-## 6. Пауза и ручная цена стейбла
+## 6. Пауза
 
 ```bash
-cast send $VAULT "pause()"   --rpc-url $RPC --ledger      # останавливает весь минт и выкуп
-cast send $VAULT "unpause()" --rpc-url $RPC --ledger
+cast send $VAULT "pause()"   --rpc-url $RPC --ledger      # owner или guardian; останавливает весь минт и выкуп
+cast send $VAULT "unpause()" --rpc-url $RPC --ledger      # только owner
 cast call $VAULT "paused()(bool)" --rpc-url $RPC
-
-# ручная цена стейбла (USD × 1e18). Отклонение > ±5% от $1 = депег: минт/выкуп только в этом стейбле останавливаются
-cast send $VAULT "setManualPrice(address,uint256)" $USDT $(cast to-wei 0.94) --rpc-url $RPC --ledger
-cast call $VAULT "isDepegged(address)(bool)" $USDT --rpc-url $RPC
-cast send $VAULT "setManualPrice(address,uint256)" $USDT $(cast to-wei 1) --rpc-url $RPC --ledger
+cast call $VAULT "pausedUntil()(uint64)" --rpc-url $RPC   # когда пауза снимется сама
+cast send $VAULT "revokeGuardian()" --rpc-url $RPC --ledger   # owner: мгновенно отозвать guardian
 ```
+Правила (код этапа B; в v3 их нет): пауза длится не дольше 30 дней и снимается сама, продлить нельзя (`EnforcedPause`);
+новую паузу можно поставить не раньше чем через 3 дня после окончания предыдущей (`PauseCooldown`) — это окно выхода для держателей.
+
+## 6a. Таймлок админских функций (код этапа B)
+
+| Функция | Задержка |
+|---|---|
+| `setManualPrice`, `setStableFeed`, `setFeeRecipient`, `setGuardian`, `setSequencerUptimeFeed` | 2 дня |
+| `setTokenRole(token, role, account, grant)` | 7 дней |
+
+Прямой вызов этих функций ревертится `OnlyTimelock`. Порядок (через Safe — те же два вызова как транзакции Safe):
+```bash
+DATA=$(cast calldata "setManualPrice(address,uint256)" $USDT $(cast to-wei 0.94))
+SALT=0x0000000000000000000000000000000000000000000000000000000000000000
+cast send $VAULT "scheduleOp(bytes,bytes32)" $DATA $SALT --rpc-url $RPC --ledger    # шаг 1, событие OpScheduled(id, …, eta)
+cast call $VAULT "opEta(bytes32)(uint256)" $(cast call $VAULT "opId(bytes,bytes32)(bytes32)" $DATA $SALT --rpc-url $RPC) --rpc-url $RPC
+cast send $VAULT "executeOp(bytes,bytes32)" $DATA $SALT --rpc-url $RPC --ledger     # шаг 2: в окне [eta, eta + 14 дней]
+cast send $VAULT "cancelOp(bytes32)" <ID> --rpc-url $RPC --ledger                    # отмена до исполнения
+```
+`setIndex`, `setWorkingPrice`, `setMinMintUsd`, `addBasket`, `proposeStable`/`executeStable` (свой таймлок 9 дней) — без этого таймлока.
+
+Ручная цена стейбла (USD × 1e18) влияет на `mint`/`redeem` только у стейбла **без** фида. Если фид задан, но недоступен или
+устарел, `mint`/`redeem` в этом стейбле ревертят `FeedUnavailable` (откат на ручную цену — только во view и в оценке покрытия).
+Экстренная реакция на депег/сбой — пауза (owner или guardian), затем смена фида/цены через таймлок.
+
+## 6b. L2 sequencer (Base)
+Если задан `sequencerUptimeFeed`, `mint`/`redeem` ревертят `SequencerDown`, пока секвенсор не работает, и `SequencerGracePeriod`
+в течение 1 ч после восстановления. `topUpReserve` и view-функции не зависят от секвенсора. В тестнете фид = 0 (проверка выключена).
 Пополнение резерва (`topUpReserve`) и пересчёт уровня (`pokeTier`, `pokeStable`) может вызвать кто угодно.
 
 ## 7. Принятие владения
@@ -187,6 +216,19 @@ cast send $VAULT "redeem(uint256,address,uint256,uint256)" 1 $USDT <BKT_WEI> 0 -
 | `0x3158719a` | `PriceOutOfBand(uint256,uint256)` — рабочая цена вне ±3% |
 | `0x52dbbfd2` | `StableDepegged(address,uint256)` |
 | `0xd93c0665` | `EnforcedPause()` |
+| `0x1c0be90a` | `OnlyTimelock()` — функция только через `scheduleOp`/`executeOp` |
+| `0xb92891d9` | `NotTimelockable(bytes4)` |
+| `0xe552c2e3` | `OpNotReady(bytes32,uint256)` — задержка не прошла |
+| `0x8ac36056` | `OpExpired(bytes32,uint256)` — прошло > 14 дней после eta |
+| `0xa1548481` | `OpNotScheduled(bytes32)` |
+| `0x4bc38916` | `OpAlreadyScheduled(bytes32)` |
+| `0x6b1883f3` | `NotOwnerOrGuardian(address)` |
+| `0x40445cac` | `PauseCooldown(uint256)` |
+| `0x032b3d00` | `SequencerDown()` |
+| `0x02047455` | `SequencerGracePeriod(uint256)` |
+| `0xc98b3832` | `SequencerFeedInvalid()` |
+| `0x9375b55d` | `FeedUnavailable(address)` |
+| `0xddef98d7` | `TokenNotRegistered(address)` |
 | `0xace70cbd` | `FaucetAmountInvalid(uint256,uint256)` — кран: 0 или > 10 000 |
 
 Расшифровка любой ошибки: `cast decode-error <data> --sig "<Сигнатура>"` или `cast 4byte <selector>`.

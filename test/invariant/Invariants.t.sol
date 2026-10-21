@@ -23,7 +23,7 @@ abstract contract InvariantBase is Test {
         MockStable usdt = new MockStable("Tether USD", "USDT", 6);
         MockStable usdc = new MockStable("USD Coin", "USDC", 6);
         MockStable dai = new MockStable("Dai", "DAI", 18);
-        vault = new BasketVault(owner, treasury, address(usdt), address(usdc), 50e18);
+        vault = new BasketVault(owner, treasury, address(usdt), address(usdc), 50e18, address(0), address(0));
         feed = new MockFeed(8, 1e8);
         toks[0] = new BasketToken("BasketCoin", "BKT", owner);
         toks[1] = new BasketToken("BasketCoin EUR", "BKT-EUR", owner);
@@ -32,7 +32,10 @@ abstract contract InvariantBase is Test {
         toks[1].grantRole(toks[1].MINTER_ROLE(), address(vault));
         vault.addBasket(1, toks[0], 1e18);
         vault.addBasket(2, toks[1], 1.08e18);
+        vm.stopPrank();
+        vm.prank(address(vault));
         vault.setStableFeed(address(usdc), IAggregatorV3(address(feed)), 1 days);
+        vm.startPrank(owner);
         vault.proposeStable(address(dai), IAggregatorV3(address(0)), 0);
         vm.warp(block.timestamp + 9 days);
         vault.executeStable(address(dai));

@@ -40,7 +40,7 @@ contract BasketVaultTest is Test {
         vm.warp(T_OCT19);
         usdt = new MockStable("Tether USD", "USDT", 6);
         usdc = new MockStable("USD Coin", "USDC", 6);
-        vault = new BasketVault(owner, treasury, address(usdt), address(usdc), 50e18);
+        vault = new BasketVault(owner, treasury, address(usdt), address(usdc), 50e18, address(0), address(0));
         coin = new BasketToken("BasketCoin", "BKT", owner);
 
         vm.startPrank(owner);
@@ -197,7 +197,7 @@ contract BasketVaultTest is Test {
 
     function test_Pause_OnlyOwner() public {
         vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, alice));
+        vm.expectRevert(abi.encodeWithSelector(BasketVault.NotOwnerOrGuardian.selector, alice));
         vault.pause();
         vm.prank(owner);
         vault.pause();
@@ -210,7 +210,7 @@ contract BasketVaultTest is Test {
     function test_Depeg_USDT_BlocksOnlyUSDT() public {
         uint256 tokens = _mint(alice, address(usdt), 1_000e6);
         _mint(alice, address(usdc), 1_000e6);
-        vm.prank(owner);
+        vm.prank(address(vault));
         vault.setManualPrice(address(usdt), 0.94e18);
         assertTrue(vault.isDepegged(address(usdt)));
         assertFalse(vault.isDepegged(address(usdc)));
@@ -228,25 +228,37 @@ contract BasketVaultTest is Test {
 
     function test_Depeg_Boundaries() public {
         vm.startPrank(owner);
+        vm.stopPrank();
+        vm.prank(address(vault));
         vault.setManualPrice(address(usdt), 0.95e18); // ровно -5% — ещё не депег
+        vm.startPrank(owner);
         assertFalse(vault.isDepegged(address(usdt)));
+        vm.stopPrank();
+        vm.prank(address(vault));
         vault.setManualPrice(address(usdt), 1.05e18); // ровно +5%
+        vm.startPrank(owner);
         assertFalse(vault.isDepegged(address(usdt)));
+        vm.stopPrank();
+        vm.prank(address(vault));
         vault.setManualPrice(address(usdt), 1.0501e18);
+        vm.startPrank(owner);
         assertTrue(vault.isDepegged(address(usdt)));
+        vm.stopPrank();
+        vm.prank(address(vault));
         vault.setManualPrice(address(usdt), 0.9499e18);
+        vm.startPrank(owner);
         assertTrue(vault.isDepegged(address(usdt)));
         vm.stopPrank();
     }
 
     function test_Depeg_Recovery() public {
         uint256 tokens = _mint(alice, address(usdt), 1_000e6);
-        vm.prank(owner);
+        vm.prank(address(vault));
         vault.setManualPrice(address(usdt), 1.08e18);
         vm.prank(alice);
         vm.expectRevert();
         vault.redeem(BASKET, address(usdt), tokens, 0);
-        vm.prank(owner);
+        vm.prank(address(vault));
         vault.setManualPrice(address(usdt), 1e18);
         vm.prank(alice);
         vault.redeem(BASKET, address(usdt), tokens, 0);
@@ -255,12 +267,12 @@ contract BasketVaultTest is Test {
 
     function test_Depeg_ConservativePricingInsideBand() public {
         // USDT = $0.97: депозит оценивается по $0.97 (меньше токенов)
-        vm.prank(owner);
+        vm.prank(address(vault));
         vault.setManualPrice(address(usdt), 0.97e18);
         uint256 out = _mint(alice, address(usdt), 1_000e6);
         assertEq(out, (uint256(997e18) * 0.97e18 / 1e18) * 10_000 / 12_000);
         // USDC = $1.02: выкуп платит по $1.02 (меньше USDC), минт оценивает по $1
-        vm.prank(owner);
+        vm.prank(address(vault));
         vault.setManualPrice(address(usdc), 1.02e18);
         uint256 out2 = _mint(bob, address(usdc), 1_000e6);
         assertEq(out2, 830833333333333333333);
@@ -271,7 +283,7 @@ contract BasketVaultTest is Test {
 
     function test_Depeg_ViaFeedWithFallback() public {
         MockFeed feed = new MockFeed(8, 1e8);
-        vm.prank(owner);
+        vm.prank(address(vault));
         vault.setStableFeed(address(usdt), IAggregatorV3(address(feed)), 1 days);
         assertEq(vault.stablePrice(address(usdt)), 1e18);
 
@@ -291,7 +303,10 @@ contract BasketVaultTest is Test {
         assertTrue(vault.isDepegged(address(usdt)));
         feed.setBroken(true);
         assertFalse(vault.isDepegged(address(usdt)));
-        _mint(alice, address(usdt), 100e6);
+        // этап B: mint/redeem не откатываются на ручную цену при сломанном фиде
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(BasketVault.FeedUnavailable.selector, address(usdt)));
+        vault.mint(BASKET, address(usdt), 100e6, 0);
 
         // ответ <= 0 -> fallback
         feed.setBroken(false);
@@ -424,13 +439,13 @@ contract BasketVaultTest is Test {
         vault.setIndex(BASKET, 1e18);
         vm.expectRevert(err);
         vault.setWorkingPrice(BASKET, 1e18);
-        vm.expectRevert(err);
+        vm.expectRevert(BasketVault.OnlyTimelock.selector);
         vault.setManualPrice(address(usdt), 1e18);
-        vm.expectRevert(err);
+        vm.expectRevert(BasketVault.OnlyTimelock.selector);
         vault.setStableFeed(address(usdt), IAggregatorV3(address(0)), 0);
         vm.expectRevert(err);
         vault.setMinMintUsd(100e18);
-        vm.expectRevert(err);
+        vm.expectRevert(BasketVault.OnlyTimelock.selector);
         vault.setFeeRecipient(alice);
         vm.expectRevert(err);
         vault.proposeStable(address(0x1234), IAggregatorV3(address(0)), 0);
@@ -469,11 +484,11 @@ contract BasketVaultTest is Test {
 
     function test_FeeRecipient_Change() public {
         address t2 = makeAddr("t2");
-        vm.prank(owner);
+        vm.prank(address(vault));
         vault.setFeeRecipient(t2);
         _mint(alice, address(usdt), 1_000e6);
         assertEq(usdt.balanceOf(t2), 3e6);
-        vm.prank(owner);
+        vm.prank(address(vault));
         vm.expectRevert(BasketVault.ZeroAddress.selector);
         vault.setFeeRecipient(address(0));
     }

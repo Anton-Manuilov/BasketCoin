@@ -39,7 +39,7 @@ abstract contract BaseTest is Test {
         vm.warp(T_OCT19);
         usdt = new MockStable("Tether USD", "USDT", 6);
         usdc = new MockStable("USD Coin", "USDC", 6);
-        vault = new BasketVault(owner, treasury, address(usdt), address(usdc), 50e18);
+        vault = new BasketVault(owner, treasury, address(usdt), address(usdc), 50e18, address(0), address(0));
         coin = new BasketToken("BasketCoin", "BKT", owner);
         vm.startPrank(owner);
         coin.grantRole(coin.MINTER_ROLE(), address(vault));

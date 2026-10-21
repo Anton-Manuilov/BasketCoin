@@ -52,13 +52,13 @@ contract MintRedeemTest is BaseTest {
 
     function test_MinMint_ConstructorBounds() public {
         vm.expectRevert(abi.encodeWithSelector(BasketVault.MinMintOutOfRange.selector, 49e18));
-        new BasketVault(owner, treasury, address(usdt), address(usdc), 49e18);
+        new BasketVault(owner, treasury, address(usdt), address(usdc), 49e18, address(0), address(0));
         vm.expectRevert(abi.encodeWithSelector(BasketVault.MinMintOutOfRange.selector, 1_001e18));
-        new BasketVault(owner, treasury, address(usdt), address(usdc), 1_001e18);
+        new BasketVault(owner, treasury, address(usdt), address(usdc), 1_001e18, address(0), address(0));
     }
 
     function test_MinMint_UsesConservativePriceBelowOne() public {
-        vm.prank(owner);
+        vm.prank(address(vault));
         vault.setManualPrice(address(usdt), 0.97e18);
         // 50 USDT * 0,97 = $48,5 < $50
         vm.prank(alice);
@@ -181,7 +181,7 @@ contract MintRedeemTest is BaseTest {
         vm.expectRevert(abi.encodeWithSelector(BasketVault.UnsupportedDecimals.selector, 19));
         vault.proposeStable(address(s19), IAggregatorV3(address(0)), 0);
         vm.expectRevert(abi.encodeWithSelector(BasketVault.UnsupportedDecimals.selector, 19));
-        new BasketVault(owner, treasury, address(s19), address(usdc), 50e18);
+        new BasketVault(owner, treasury, address(s19), address(usdc), 50e18, address(0), address(0));
     }
 
     // ------------------------------------------------ нестандартные токены
@@ -243,7 +243,10 @@ contract MintRedeemTest is BaseTest {
     function test_Pause_WithDepeg_PauseCheckedFirst() public {
         uint256 t = _mint(alice, address(usdt), 1_000e6);
         vm.startPrank(owner);
+        vm.stopPrank();
+        vm.prank(address(vault));
         vault.setManualPrice(address(usdt), 0.9e18);
+        vm.startPrank(owner);
         vault.pause();
         vm.stopPrank();
         vm.startPrank(alice);
@@ -275,6 +278,7 @@ contract MintRedeemTest is BaseTest {
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(BasketVault.RedemptionSuspended.selector, BASKET, cov, 11_500));
         vault.redeem(BASKET, address(usdt), t, 0);
+        vm.warp(block.timestamp + vault.PAUSE_COOLDOWN()); // новая пауза — только после кулдауна
         vm.prank(owner);
         vault.pause();
         _expectTier(BASKET, BasketVault.RedeemTier.Suspended, BasketVault.RedeemTier.Standard);
@@ -291,7 +295,10 @@ contract MintRedeemTest is BaseTest {
         vault.pause();
         vm.expectRevert(Pausable.EnforcedPause.selector);
         vault.pause();
+        vm.stopPrank();
+        vm.prank(address(vault));
         vault.setManualPrice(address(usdt), 0.99e18);
+        vm.startPrank(owner);
         vault.setWorkingPrice(BASKET, 1.01e18);
         vault.setMinMintUsd(100e18);
         vault.unpause();
@@ -345,7 +352,7 @@ contract MintRedeemTest is BaseTest {
         vault.mint(2, address(usdt), 1_000e6, 0);
         _expectTier(BASKET, BasketVault.RedeemTier.Standard, BasketVault.RedeemTier.Suspended);
         _expectTier(2, BasketVault.RedeemTier.Standard, BasketVault.RedeemTier.Suspended);
-        vm.prank(owner);
+        vm.prank(address(vault));
         vault.setManualPrice(address(usdt), 0.955e18);
     }
 

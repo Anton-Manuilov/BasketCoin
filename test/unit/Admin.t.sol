@@ -152,9 +152,15 @@ contract AdminTest is BaseTest {
         BasketToken t2 = new BasketToken("T2", "T2", owner);
         vm.expectRevert(BasketVault.InvalidPrice.selector);
         vault.addBasket(2, t2, 1e36 + 1);
+        vm.stopPrank();
+        vm.prank(address(vault));
         vm.expectRevert(BasketVault.InvalidPrice.selector);
         vault.setManualPrice(address(usdt), 1e36 + 1);
+        vm.startPrank(owner);
+        vm.stopPrank();
+        vm.prank(address(vault));
         vault.setManualPrice(address(usdt), 1e36); // граница допустима (депег)
+        vm.startPrank(owner);
         vm.warp(T_OCT28);
         vm.expectRevert(BasketVault.InvalidPrice.selector);
         vault.setIndex(BASKET, 1e36 + 1);
@@ -173,31 +179,31 @@ contract AdminTest is BaseTest {
 
     // ------------------------------------------------ казна
     function test_Regression_F06_FeeRecipientCannotBeVault() public {
-        vm.prank(owner);
+        vm.prank(address(vault));
         vm.expectRevert(abi.encodeWithSelector(BasketVault.InvalidFeeRecipient.selector, address(vault)));
         vault.setFeeRecipient(address(vault));
         vm.expectRevert(BasketVault.ZeroAddress.selector);
-        new BasketVault(owner, address(0), address(usdt), address(usdc), 50e18);
+        new BasketVault(owner, address(0), address(usdt), address(usdc), 50e18, address(0), address(0));
     }
 
     function test_FeeRecipient_EventAndZero() public {
         vm.expectEmit(true, true, false, false, address(vault));
         emit BasketVault.FeeRecipientUpdated(treasury, carol);
-        vm.prank(owner);
+        vm.prank(address(vault));
         vault.setFeeRecipient(carol);
         assertEq(vault.feeRecipient(), carol);
-        vm.prank(owner);
+        vm.prank(address(vault));
         vm.expectRevert(BasketVault.ZeroAddress.selector);
         vault.setFeeRecipient(address(0));
     }
 
     function test_Constructor_ZeroAndDuplicateStables() public {
         vm.expectRevert(BasketVault.ZeroAddress.selector);
-        new BasketVault(owner, treasury, address(0), address(usdc), 50e18);
+        new BasketVault(owner, treasury, address(0), address(usdc), 50e18, address(0), address(0));
         vm.expectRevert(abi.encodeWithSelector(BasketVault.StableAlreadyEnabled.selector, address(usdt)));
-        new BasketVault(owner, treasury, address(usdt), address(usdt), 50e18);
+        new BasketVault(owner, treasury, address(usdt), address(usdt), 50e18, address(0), address(0));
         vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableInvalidOwner.selector, address(0)));
-        new BasketVault(address(0), treasury, address(usdt), address(usdc), 50e18);
+        new BasketVault(address(0), treasury, address(usdt), address(usdc), 50e18, address(0), address(0));
     }
 
     // ------------------------------------------------ доступ: все owner-функции
@@ -216,15 +222,15 @@ contract AdminTest is BaseTest {
         vault.executeStable(address(dai));
         vm.expectRevert(err);
         vault.cancelStable(address(dai));
-        vm.expectRevert(err);
+        vm.expectRevert(BasketVault.OnlyTimelock.selector);
         vault.setManualPrice(address(usdt), 1e18);
-        vm.expectRevert(err);
+        vm.expectRevert(BasketVault.OnlyTimelock.selector);
         vault.setStableFeed(address(usdt), IAggregatorV3(address(0)), 0);
         vm.expectRevert(err);
         vault.setMinMintUsd(100e18);
-        vm.expectRevert(err);
+        vm.expectRevert(BasketVault.OnlyTimelock.selector);
         vault.setFeeRecipient(caller);
-        vm.expectRevert(err);
+        vm.expectRevert(abi.encodeWithSelector(BasketVault.NotOwnerOrGuardian.selector, caller));
         vault.pause();
         vm.expectRevert(err);
         vault.unpause();
@@ -290,13 +296,19 @@ contract AdminTest is BaseTest {
     // ------------------------------------------------ события с аргументами
     function test_Events_ConfigWithArgs() public {
         vm.startPrank(owner);
+        vm.stopPrank();
+        vm.prank(address(vault));
         vm.expectEmit(address(vault));
         emit BasketVault.ManualPriceUpdated(address(usdt), 1e18, 0.99e18);
         vault.setManualPrice(address(usdt), 0.99e18);
+        vm.startPrank(owner);
         MockFeed f = new MockFeed(8, 1e8);
+        vm.stopPrank();
+        vm.prank(address(vault));
         vm.expectEmit(address(vault));
         emit BasketVault.StableFeedUpdated(address(usdt), address(0), address(f), 0, 123);
         vault.setStableFeed(address(usdt), IAggregatorV3(address(f)), 123);
+        vm.startPrank(owner);
         vm.expectEmit(false, false, false, true, address(vault));
         emit BasketVault.MinMintUpdated(50e18, 75e18);
         vault.setMinMintUsd(75e18);
@@ -323,7 +335,7 @@ contract AdminTest is BaseTest {
         vm.expectRevert(abi.encodeWithSelector(BasketVault.StableNotEnabled.selector, x));
         vault.quoteRedeem(BASKET, x, 1);
         vm.stopPrank();
-        vm.prank(owner);
+        vm.prank(address(vault));
         vm.expectRevert(abi.encodeWithSelector(BasketVault.StableNotEnabled.selector, x));
         vault.setStableFeed(x, IAggregatorV3(address(0)), 0);
     }

@@ -1,4 +1,4 @@
-# BasketCoin — краткая спецификация смарт-контракта (черновик v0.4: лимит изменения индекса ±11%)
+# BasketCoin — краткая спецификация смарт-контракта (черновик v0.5: этап B — guardian, таймлок, L2 sequencer)
 
 Статус: прототип для тестов. Прошёл внутреннюю проверку (см. `AUDIT_REPORT.md`), внешнего аудита не было. Развёрнут только в тестнете Base Sepolia (тикер токена — BKT), в основных сетях не деплоился.
 
@@ -18,15 +18,17 @@ Solidity 0.8.24, OpenZeppelin 5.1.0, Foundry.
 ## 2. Параметры
 | Параметр | Значение |
 |---|---|
-| Оракул | только owner (ключ Антона) |
+| Оракул | только owner (в mainnet — Safe 2-of-3: аппаратный и резервный ключи Антона + страховочный ключ); `setIndex`/`setWorkingPrice` — без таймлока |
+| Таймлок параметров | встроенный: `scheduleOp(data, salt)` → `executeOp(data, salt)` (owner) в окне `[eta, eta+14 дней]`, `cancelOp(id)`. 2 дня: `setManualPrice`, `setStableFeed`, `setFeeRecipient`, `setGuardian`, `setSequencerUptimeFeed`; 7 дней: `setTokenRole` (роли `BasketToken`, админ которого — Vault). Прямой вызов — `OnlyTimelock` |
 | Фиксация индекса `setIndex` | только 28-го числа по UTC и не чаще одного раза в календарный месяц; рабочая цена сбрасывается на новый индекс |
 | Лимит изменения индекса | **±11% за одно обновление** от предыдущего зафиксированного индекса корзины (`MAX_INDEX_CHANGE_BPS = 1100`, константа). Границы включительно и округляются в сторону строгости: `min = ceil(old × 0,89)`, `max = floor(old × 1,11)`, поэтому диапазон никогда не шире ±11%. Отказ — `IndexChangeTooLarge(basketId, oldIndex, newIndex, minAllowed, maxAllowed)`. Revert не расходует попытку месяца: в тот же день можно повторить с допустимым значением. Стартовый индекс в `addBasket` лимитом не ограничен. Текущий диапазон — view `indexBounds(basketId)` |
 | Рабочая цена `setWorkingPrice` | в пределах ±3% от последнего зафиксированного индекса; минт и выкуп идут по рабочей цене |
-| Комиссия | 0,3% (30 bps) на минт и на выкуп, в стейбле, уходит на `feeRecipient` (казна, owner может сменить) |
+| Комиссия | 0,3% (30 bps) на минт и на выкуп, в стейбле, уходит на `feeRecipient` (казна, меняется через таймлок 2 дня) |
 | Минимальный минт | `minMintUsd`, owner меняет в диапазоне $50–$1000 включительно. **К чему применяется:** к сумме стейбла, *фактически поступившей* в Vault (для токенов с комиссией за перевод — после неё), *до* комиссии протокола 0,3%, оценённой по min(p, $1) с округлением вниз. Пример: при `minMintUsd = $50` депозит ровно 50 USDT проходит (в резерв 49,85 USDT), 49,999999 USDT — `BelowMinMint`. Если USDT стоит $0,99, нужно ≥ 50,505051 USDT. На выкуп минимум не распространяется |
 | Стейблы | USDT и USDC добавляются в конструкторе; decimals читаются из токена (6); поддерживаются decimals 0–18 (проверка уже в `proposeStable`). Новый стейбл: `proposeStable` → `executeStable` не раньше чем через 9 дней (`cancelStable` отменяет) |
-| Депег | цена стейбла берётся из фида, если он свежий и валиден, иначе из ручной цены owner'а. Если цена вне диапазона $0,95–$1,05 включительно, минт и выкуп блокируются только в этом стейбле. Когда цена возвращается в диапазон, блокировка снимается сама |
-| Аварийная пауза | `pause`/`unpause` вызывает только owner; останавливает весь минт и выкуп |
+| Депег | цена стейбла берётся из фида, если он свежий и валиден, иначе из ручной цены owner'а (таймлок 2 дня). **Строгий фид:** если у стейбла задан фид, а ответ невалиден/устарел, `mint`/`redeem` в этом стейбле ревертят `FeedUnavailable` (ручная цена используется только во view и в оценке покрытия). Если цена вне диапазона $0,95–$1,05 включительно, минт и выкуп блокируются только в этом стейбле. Когда цена возвращается в диапазон, блокировка снимается сама |
+| Аварийная пауза | `pause` — owner или `guardian` (отдельный адрес), `unpause` — только owner; останавливает весь минт и выкуп; истекает сама через 30 дней (`MAX_PAUSE_DURATION`), продлить нельзя; новая пауза — не раньше 3 дней после окончания предыдущей (`PAUSE_COOLDOWN`). Guardian назначается таймлоком (2 дня), отзывается owner'ом мгновенно (`revokeGuardian`) |
+| L2 sequencer | `sequencerUptimeFeed` (Chainlink, 0 = выключено). В `mint`/`redeem`: `answer = 1` → `SequencerDown`; не прошло > 3600 с с `startedAt` → `SequencerGracePeriod`; иной ответ/ошибка → `SequencerFeedInvalid` |
 | Буфер | 20% (`BUFFER_BPS = 2000`); возвращается при выкупе только при покрытии ≥ 140% |
 | Уровни выкупа | ≥140% FULL / 115–140% STANDARD / <115% SUSPENDED (константы) |
 | Пополнение резерва | `topUpReserve` — любой адрес, без минта |
@@ -98,12 +100,15 @@ gross ≤ резерв этого стейбла в этой корзине
 
 | Действие | Событие и параметры |
 |---|---|
-| Деплой | `OwnershipTransferred(0↑, owner↑)`, `FeeRecipientUpdated(0↑, recipient↑)`, `MinMintUpdated(0, value)`, `StableAdded(USDT/USDC↑, 6, feed↑=0, 0, viaTimelock=false)` |
+| Деплой | `OwnershipTransferred(0↑, owner↑)`, `FeeRecipientUpdated(0↑, recipient↑)`, `MinMintUpdated(0, value)`, `GuardianUpdated(0↑, guardian↑)`, `SequencerUptimeFeedUpdated(0↑, feed↑)`, `StableAdded(USDT/USDC↑, 6, feed↑=0, 0, viaTimelock=false)` |
 | Создание корзины | `BasketAdded(basketId↑, token↑, initialIndex, initialTier)` |
 | Индекс (28-го) | `IndexUpdated(basketId↑, oldIndex, newIndex, oldWorkingPrice, year, month, timestamp)` |
 | Рабочая цена | `WorkingPriceUpdated(basketId↑, oldPrice, newPrice, index)` |
 | Смена уровня | `CoverageTierChanged(basketId↑, oldTier↑, newTier↑, coverageBps)` |
-| Пауза | `Paused(account)` / `Unpaused(account)` (OpenZeppelin) |
+| Пауза | `Paused(account)` + `PauseWindow(by↑, until)` / `Unpaused(account)` (OpenZeppelin) |
+| Таймлок | `OpScheduled(id↑, selector↑, data, salt, eta)`, `OpExecuted(id↑, selector↑)`, `OpCancelled(id↑)` |
+| Guardian / секвенсор | `GuardianUpdated(old↑, new↑)`, `SequencerUptimeFeedUpdated(old↑, new↑)` |
+| Роли токена | `TokenRoleUpdated(token↑, role↑, account↑, granted)` + `RoleGranted`/`RoleRevoked` токена |
 | Стейбл: заявка | `StableProposed(stable↑, decimals, feed↑, maxFeedStaleness, executeAfter, previousExecuteAfter)` |
 | Стейбл: отмена | `StableProposalCancelled(stable↑, executeAfter)` |
 | Стейбл: включение | `StableAdded(stable↑, decimals, feed↑, maxFeedStaleness, viaTimelock=true)` |
@@ -140,7 +145,7 @@ gross ≤ резерв этого стейбла в этой корзине
 6. Целевая сеть, реальные адреса USDT/USDC и фидов Chainlink.
 
 ## 7. Риски
-- **Централизация.** Один ключ owner'а — это оракул, пауза и все параметры. При компрометации ключа можно в пределах правил сдвигать индекс на ±11% каждый месяц (за год до ×3,50 или ×0,25) и заблокировать вывод паузой. Рекомендуются multisig (Safe) и таймлок.
+- **Централизация.** owner (Safe 2-of-3) — это оракул и параметры. При компрометации двух ключей можно в пределах правил сдвигать индекс на ±11% каждый месяц (за год до ×3,50 или ×0,25) — индекс сознательно без таймлока. Остальные параметры — через таймлок 2/7 дней (видно заранее по `OpScheduled`); пауза — не дольше 30 дней с окном выхода 3 дня.
 - **Ручная цена депега приблизительна.** Она обновляется только когда owner отправит транзакцию, поэтому между реальным депегом и блокировкой возможна задержка, и в это окно можно минтить. Фид Chainlink с fallback уменьшает эту задержку, но не убирает её.
 - **Очередь на выкуп.** На STANDARD тем, кто выкупает раньше, выгоднее ждать: каждый ранний выкуп оставляет буфер следующим. Возможен эффект «все ждут 140%». И наоборот: при падении ниже 115% выкуп закрывается для всех, пока покрытие не восстановится.
 - **Уровень может измениться между котировкой и транзакцией** (новый индекс, другие выкупы). От этого защищает `minStableOut`; сайт должен передавать его по `payoutNow`.
@@ -194,3 +199,11 @@ forge coverage --report summary --no-match-coverage '(test|lib|script)/'
 | `NotIndexDay(day)` | не 28-е число (UTC) |
 | `IndexAlreadyUpdatedThisMonth()` | в этом месяце уже было успешное обновление |
 | `IndexChangeTooLarge(basketId, oldIndex, newIndex, minAllowed, maxAllowed)` | новый индекс вне `[ceil(old×0,89), floor(old×1,11)]` |
+
+## 11. Изменения v0.5 (этап B)
+- `guardian`: может только `pause()`. Пауза ≤ 30 дней, снимается сама; кулдаун 3 дня между паузами; `unpause` — только owner.
+- Встроенный таймлок (`scheduleOp`/`executeOp`/`cancelOp`): 2 дня для фида, ручной цены, казны, guardian, фида секвенсора; 7 дней для ролей токена (`setTokenRole`); окно исполнения 14 дней.
+- Админ ролей `BasketToken` — сам Vault (скрипт деплоя передаёт роль и снимает её с деплоера).
+- Chainlink L2 Sequencer Uptime Feed (grace 3600 с) в `mint`/`redeem`; `0` = выключено (тестнет).
+- Строгий фид в `mint`/`redeem` (`FeedUnavailable`), view и покрытие — с откатом на ручную цену.
+- Конструктор: `+ guardian_, sequencerUptimeFeed_`. `setIndex`/`setWorkingPrice`/`setMinMintUsd`/`addBasket` — без изменений.

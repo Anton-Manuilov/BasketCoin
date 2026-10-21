@@ -111,16 +111,20 @@ contract EventsTest is BaseTest {
         vm.expectEmit(true, true, true, true);
         emit BasketVault.MinMintUpdated(0, 75e18);
         vm.expectEmit(true, true, true, true);
+        emit BasketVault.GuardianUpdated(address(0), address(0));
+        vm.expectEmit(true, true, true, true);
+        emit BasketVault.SequencerUptimeFeedUpdated(address(0), address(0));
+        vm.expectEmit(true, true, true, true);
         emit BasketVault.StableAdded(address(usdt), 6, address(0), 0, false);
         vm.expectEmit(true, true, true, true);
         emit BasketVault.StableAdded(address(usdc), 6, address(0), 0, false);
-        BasketVault v = new BasketVault(owner, treasury, address(usdt), address(usdc), 75e18);
+        BasketVault v = new BasketVault(owner, treasury, address(usdt), address(usdc), 75e18, address(0), address(0));
         Vm.Log[] memory logs = vm.getRecordedLogs();
         uint256 n;
         for (uint256 i; i < logs.length; ++i) {
             if (logs[i].emitter == address(v)) ++n;
         }
-        assertEq(n, 5, "exactly 5 events from the new vault");
+        assertEq(n, 7, "exactly 7 events from the new vault");
     }
 
     // ------------------------------------------------------------ корзина
@@ -182,9 +186,11 @@ contract EventsTest is BaseTest {
         vm.recordLogs();
         vm.expectEmit(address(vault));
         emit Pausable.Paused(owner);
+        vm.expectEmit(address(vault));
+        emit BasketVault.PauseWindow(owner, block.timestamp + 30 days);
         vm.prank(owner);
         vault.pause();
-        _assertVaultSigs(_s(Pausable.Paused.selector));
+        _assertVaultSigs(_s(Pausable.Paused.selector, BasketVault.PauseWindow.selector));
         vm.recordLogs();
         vm.expectEmit(address(vault));
         emit Pausable.Unpaused(owner);
@@ -261,7 +267,7 @@ contract EventsTest is BaseTest {
         vm.recordLogs();
         vm.expectEmit(address(vault));
         emit BasketVault.FeeRecipientUpdated(treasury, carol);
-        vm.prank(owner);
+        vm.prank(address(vault));
         vault.setFeeRecipient(carol);
         _assertVaultSigs(_s(SIG_FEERCPT));
     }
@@ -294,7 +300,7 @@ contract EventsTest is BaseTest {
 
     function test_Ev_Minted_SecondMint_StablePriceBelowOne_NoTierEvent() public {
         _mint(alice, address(usdt), 1_000e6);
-        vm.prank(owner);
+        vm.prank(address(vault));
         vault.setManualPrice(address(usdc), 0.99e18);
         uint256 before_ = _cov();
         uint256 exp = vault.previewMint(BASKET, address(usdc), 1_000e6);
@@ -327,7 +333,7 @@ contract EventsTest is BaseTest {
         uint256 t = _mint(alice, address(usdt), 1_000e6);
         _mint(bob, address(usdt), 1_000e6);
         _topUpTo(15_000, address(usdt));
-        vm.prank(owner);
+        vm.prank(address(vault));
         vault.setManualPrice(address(usdt), 1.01e18); // выплата по max(p,$1) = 1,01
         assertEq(uint256(_tier()), uint256(FULL));
         pendingTokens = t;
@@ -398,35 +404,50 @@ contract EventsTest is BaseTest {
     function test_Ev_ManualPrice_DepegEnterRepeatExit() public {
         vm.startPrank(owner);
         vm.recordLogs();
+        vm.stopPrank();
+        vm.prank(address(vault));
         vm.expectEmit(address(vault));
         emit BasketVault.ManualPriceUpdated(address(usdt), 1e18, 0.95e18);
         vault.setManualPrice(address(usdt), 0.95e18); // граница включительно — не депег
+        vm.startPrank(owner);
         _assertVaultSigs(_s(SIG_MANUAL));
 
         vm.recordLogs();
+        vm.stopPrank();
+        vm.prank(address(vault));
         vm.expectEmit(address(vault));
         emit BasketVault.ManualPriceUpdated(address(usdt), 0.95e18, 0.95e18 - 1);
         vm.expectEmit(address(vault));
         emit BasketVault.StableDepegStatusChanged(address(usdt), true, 0.95e18 - 1);
         vault.setManualPrice(address(usdt), 0.95e18 - 1);
+        vm.startPrank(owner);
         _assertVaultSigs(_s(SIG_MANUAL, SIG_DEPEG));
 
         vm.recordLogs();
+        vm.stopPrank();
+        vm.prank(address(vault));
         vault.setManualPrice(address(usdt), 0.9e18); // всё ещё депег — повторного события нет
+        vm.startPrank(owner);
         _assertVaultSigs(_s(SIG_MANUAL));
 
         vm.recordLogs();
+        vm.stopPrank();
+        vm.prank(address(vault));
         vm.expectEmit(address(vault));
         emit BasketVault.ManualPriceUpdated(address(usdt), 0.9e18, 1.05e18);
         vm.expectEmit(address(vault));
         emit BasketVault.StableDepegStatusChanged(address(usdt), false, 1.05e18);
         vault.setManualPrice(address(usdt), 1.05e18);
+        vm.startPrank(owner);
         _assertVaultSigs(_s(SIG_MANUAL, SIG_DEPEG));
 
         vm.recordLogs();
+        vm.stopPrank();
+        vm.prank(address(vault));
         vm.expectEmit(address(vault));
         emit BasketVault.StableDepegStatusChanged(address(usdt), true, 1.05e18 + 1);
         vault.setManualPrice(address(usdt), 1.05e18 + 1); // депег вверх
+        vm.startPrank(owner);
         _assertVaultSigs(_s(SIG_MANUAL, SIG_DEPEG));
         vm.stopPrank();
     }
@@ -438,7 +459,7 @@ contract EventsTest is BaseTest {
         emit BasketVault.ManualPriceUpdated(address(usdt), 1e18, 0.95e18);
         vm.expectEmit(address(vault));
         emit BasketVault.CoverageTierChanged(BASKET, STD, SUS, 11_400); // 12 000 × 0,95
-        vm.prank(owner);
+        vm.prank(address(vault));
         vault.setManualPrice(address(usdt), 0.95e18);
         _assertVaultSigs(_s(SIG_MANUAL, SIG_TIER));
         assertEq(_cov(), 11_400);
@@ -449,33 +470,42 @@ contract EventsTest is BaseTest {
         MockFeed f = new MockFeed(8, 1e8);
         vm.startPrank(owner);
         vm.recordLogs();
+        vm.stopPrank();
+        vm.prank(address(vault));
         vm.expectEmit(address(vault));
         emit BasketVault.StableFeedUpdated(address(usdt), address(0), address(f), 0, 3600);
         vault.setStableFeed(address(usdt), IAggregatorV3(address(f)), 3600);
+        vm.startPrank(owner);
         _assertVaultSigs(_s(SIG_FEED));
 
         MockFeed g = new MockFeed(18, 0.93e18);
         vm.recordLogs();
+        vm.stopPrank();
+        vm.prank(address(vault));
         vm.expectEmit(address(vault));
         emit BasketVault.StableFeedUpdated(address(usdt), address(f), address(g), 3600, 60);
         vm.expectEmit(address(vault));
         emit BasketVault.StableDepegStatusChanged(address(usdt), true, 0.93e18);
         vault.setStableFeed(address(usdt), IAggregatorV3(address(g)), 60);
+        vm.startPrank(owner);
         _assertVaultSigs(_s(SIG_FEED, SIG_DEPEG));
 
         vm.recordLogs();
+        vm.stopPrank();
+        vm.prank(address(vault));
         vm.expectEmit(address(vault));
         emit BasketVault.StableFeedUpdated(address(usdt), address(g), address(0), 60, 0);
         vm.expectEmit(address(vault));
         emit BasketVault.StableDepegStatusChanged(address(usdt), false, 1e18); // фид отключён → ручная $1
         vault.setStableFeed(address(usdt), IAggregatorV3(address(0)), 0);
+        vm.startPrank(owner);
         _assertVaultSigs(_s(SIG_FEED, SIG_DEPEG));
         vm.stopPrank();
     }
 
     function test_Ev_Depeg_ViaPokeStable_AndPokeTier() public {
         MockFeed f = new MockFeed(8, 1e8);
-        vm.prank(owner);
+        vm.prank(address(vault));
         vault.setStableFeed(address(usdc), IAggregatorV3(address(f)), 3600);
         _mint(alice, address(usdt), 1_000e6);
         _mint(bob, address(usdc), 1_000e6);
@@ -515,7 +545,7 @@ contract EventsTest is BaseTest {
 
     function test_Ev_Depeg_RecoveryDetectedInMint() public {
         MockFeed f = new MockFeed(8, 1e8);
-        vm.prank(owner);
+        vm.prank(address(vault));
         vault.setStableFeed(address(usdc), IAggregatorV3(address(f)), 3600);
         f.set(0.9e8, block.timestamp);
         vault.pokeStable(address(usdc));
@@ -536,7 +566,7 @@ contract EventsTest is BaseTest {
     function test_Ev_Depeg_DetectedInTopUp() public {
         _mint(alice, address(usdt), 1_000e6);
         MockFeed f = new MockFeed(8, 1e8);
-        vm.prank(owner);
+        vm.prank(address(vault));
         vault.setStableFeed(address(usdc), IAggregatorV3(address(f)), 3600);
         f.set(0.9e8, block.timestamp); // topUp принимает депегнутый стейбл (по min(p,$1))
         pendingStable = address(usdc);
@@ -570,11 +600,11 @@ contract EventsTest is BaseTest {
         vault.setWorkingPrice(BASKET, 0.99e18);
         _assertVaultSigs(_s(SIG_WP));
         vm.recordLogs();
-        vm.prank(owner);
+        vm.prank(address(vault));
         vault.setManualPrice(address(usdc), 1.01e18);
         _assertVaultSigs(_s(SIG_MANUAL));
         vm.recordLogs();
-        vm.prank(owner);
+        vm.prank(address(vault));
         vault.setStableFeed(address(usdc), IAggregatorV3(address(0)), 10);
         _assertVaultSigs(_s(SIG_FEED));
         vm.warp(T_OCT28);

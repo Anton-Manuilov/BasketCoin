@@ -1,6 +1,6 @@
 # BasketCoin — пакет для внешнего аудита
 
-Пакет собран 20.10.2026 для передачи аудиторам. Это **не** отчёт аудита: внешнего аудита ещё не было,
+Пакет собран 20.10.2026, обновлён 19.10.2026 под этап B (guardian, ограниченная пауза, таймлок, L2 sequencer). Это **не** отчёт аудита: внешнего аудита ещё не было,
 есть только внутренняя проверка ([`AUDIT_REPORT.md`](../../AUDIT_REPORT.md)).
 
 ## Замороженный коммит (scope freeze)
@@ -8,8 +8,8 @@
 | Поле | Значение |
 |---|---|
 | Репозиторий | https://github.com/Anton-Manuilov/BasketCoin (публичный) |
-| Коммит для аудита | **`bdfada3d87bac3464bbb599582f46057939d8cb5`** (ветка `main`, опубликован) |
-| Код `src/` (кроме `src/testnet/`) | не менялся с `5e94199`; хеши файлов — [`appendix/scope.sha256`](appendix/scope.sha256) |
+| Коммит для аудита | **коммит «Stage B: guardian pause, admin timelock, L2 sequencer check»** (ветка `main`; пока локальный, хеш — после публикации). Предыдущая заморозка `bdfada3` (до этапа B) устарела |
+| Код `src/` (кроме `src/testnet/`) | изменён только `BasketVault.sol` (этап B); хеши файлов — [`appendix/scope.sha256`](appendix/scope.sha256) |
 | Компилятор | solc 0.8.24, optimizer on, runs 200, без via-IR (`foundry.toml`) |
 | Зависимости | OpenZeppelin Contracts 5.1.0, forge-std v1.17.0 (git-сабмодули) |
 | Инструменты | Foundry (forge 1.8.5), Slither 0.11.6 |
@@ -22,11 +22,11 @@ nSLOC здесь — строки без комментариев и пусты�
 
 | Файл | Строк | nSLOC | В scope |
 |---|---:|---:|---|
-| `src/BasketVault.sol` | 1052 | 648 | да |
+| `src/BasketVault.sol` | 1281 | 784 | да |
 | `src/BasketToken.sol` | 38 | 16 | да |
 | `src/libraries/DateLib.sol` | 31 | 19 | да |
 | `src/interfaces/IAggregatorV3.sol` | 12 | 8 | да (интерфейс) |
-| **Итого в scope** | **1133** | **≈691** | |
+| **Итого в scope** | **1362** | **≈827** (было ≈691) | |
 | `src/testnet/TestStablecoins.sol` | 46 | 22 | нет: только для тестнета, в основную сеть не идёт |
 
 Вне scope: `lib/` (OpenZeppelin, forge-std), `test/`, `script/`, сайт.
@@ -48,8 +48,8 @@ nSLOC здесь — строки без комментариев и пусты�
 ## Как воспроизвести
 ```bash
 git clone --recursive https://github.com/Anton-Manuilov/BasketCoin && cd BasketCoin
-git checkout bdfada3d87bac3464bbb599582f46057939d8cb5
-forge build && forge test                      # 204 теста
+git checkout <коммит этапа B>
+forge build && forge test                      # 230 тестов
 FOUNDRY_PROFILE=ci forge test                  # fuzz 10 000, invariant 1000 × 200
 forge coverage --report summary --no-match-coverage '(test|lib|script)/'
 slither . --filter-paths "lib/|test/|script/" --exclude-dependencies
@@ -57,4 +57,5 @@ slither . --filter-paths "lib/|test/|script/" --exclude-dependencies
 
 ## Тестнет (Base Sepolia, chainId 84532)
 Vault `0xF6b93f9124d24AadEe6d38b9a925d220d731B4d6`, токен BKT `0x2E72B4D6E2d611E6a193287D0736DfAabddDB062`
-(верифицированы на Blockscout и Sourcify; см. `deployments/base-sepolia.json`). Тестнет-набор собран из того же кода `src/`.
+(верифицированы на Blockscout и Sourcify; см. `deployments/base-sepolia.json`). Это набор v3 из кода **до этапа B**;
+для проверки этапа B нужен новый тестнет-набор v4.

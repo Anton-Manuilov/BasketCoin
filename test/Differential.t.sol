@@ -33,7 +33,7 @@ contract DifferentialRoundingTest is BaseTest {
     /// математики на произвольных индексах (1 wei .. 1e36) разворачивается свежий Vault, где корзина
     /// создаётся сразу с индексом p (стартовый индекс лимитом не ограничен). Вызывать в начале теста.
     function _setIndex(uint256 p) internal {
-        vault = new BasketVault(owner, treasury, address(usdt), address(usdc), 50e18);
+        vault = new BasketVault(owner, treasury, address(usdt), address(usdc), 50e18, address(0), address(0));
         coin = new BasketToken("BasketCoin", "BKT", owner);
         vm.startPrank(owner);
         coin.grantRole(coin.MINTER_ROLE(), address(vault));
@@ -57,7 +57,7 @@ contract DifferentialRoundingTest is BaseTest {
         pBps = bound(pBps, 9_500, 10_500);
         index = bound(index, 1e6, 1e30);
         _setIndex(index);
-        vm.prank(owner);
+        vm.prank(address(vault));
         vault.setManualPrice(st, pBps * 1e14);
         uint256 amount = amountUsd * 10 ** dec + (seed % (10 ** dec)); // добавим «копейки»
         uint256 minP = pBps <= 10_000 ? pBps * 1e14 : 1e18;
@@ -86,7 +86,7 @@ contract DifferentialRoundingTest is BaseTest {
         MockStable(st).approve(address(vault), type(uint256).max);
         vm.prank(address(vault));
         coin.mint(alice, tokens); // эмулируем выпуск (vault — минтер)
-        vm.prank(owner);
+        vm.prank(address(vault));
         vault.setManualPrice(st, pBps * 1e14);
         uint256 usdValue = Math.mulDiv(tokens, index, 1e18);
         if (usdValue < 1_000e18) return; // слишком мелко для точного выставления уровня
@@ -132,7 +132,7 @@ contract DifferentialRoundingTest is BaseTest {
         s18.mint(alice, amount);
         vm.prank(alice);
         s18.approve(address(vault), type(uint256).max);
-        vm.prank(owner);
+        vm.prank(address(vault));
         vault.setManualPrice(address(s18), pBps * 1e14);
 
         uint256 t;

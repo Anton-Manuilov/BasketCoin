@@ -214,7 +214,7 @@ contract VaultHandler is Test {
         calls["setManualPrice"]++;
         address st = _stable(stableSeed);
         bps = bound(bps, 9_300, 10_700); // ~70% значений внутри полосы ±5%
-        vm.prank(owner);
+        vm.prank(address(vault));
         try vault.setManualPrice(st, bps * 1e14) {
             successes["setManualPrice"]++;
         } catch {}

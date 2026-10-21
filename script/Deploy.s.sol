@@ -11,7 +11,10 @@ import {TestUSDT, TestUSDC} from "../src/testnet/TestStablecoins.sol";
 ///
 /// Переменные окружения:
 ///   DEPLOYER_PK       — приватный ключ деплоера (обязательно; хранится вне репозитория)
-///   OWNER_ADDRESS     — будущий владелец Vault и админ ролей токена (по умолчанию — деплоер)
+///   OWNER_ADDRESS     — будущий владелец Vault: Safe 2-of-3 в mainnet (по умолчанию — деплоер)
+///   GUARDIAN_ADDRESS  — guardian паузы, отдельный адрес (может только поставить паузу; по умолчанию — нет)
+///   SEQUENCER_UPTIME_FEED — Chainlink L2 Sequencer Uptime Feed (по умолчанию 0 = проверка выключена;
+///                       в тестнете 0, в Base mainnet — только адрес из официальной документации Chainlink)
 ///   FEE_RECIPIENT     — казна для комиссий (по умолчанию — OWNER_ADDRESS, а если он не задан — деплоер)
 ///   MIN_MINT_USD      — минимальный минт, USD 18 знаков (по умолчанию 50e18 = $50)
 ///   INITIAL_INDEX     — стартовый индекс корзины, 18 знаков (по умолчанию 1e18 = $1,00)
@@ -22,9 +25,8 @@ import {TestUSDT, TestUSDC} from "../src/testnet/TestStablecoins.sol";
 /// Передача прав, если OWNER_ADDRESS != деплоер:
 ///   - Vault (Ownable2Step): transferOwnership(OWNER) — владелец остаётся деплоером, пока OWNER не вызовет
 ///     acceptOwnership(). До этого OWNER числится pendingOwner.
-///   - BasketToken (AccessControl): grantRole(DEFAULT_ADMIN_ROLE, OWNER), затем деплоер отказывается от
-///     своей роли (renounceRole). Это одношаговая передача: проверьте OWNER_ADDRESS до запуска.
-///     MINTER_ROLE у Vault при этом сохраняется.
+///   - BasketToken (AccessControl): DEFAULT_ADMIN_ROLE передаётся самому Vault (всегда), деплоер отказывается
+///     от своей роли. Дальше роли токена меняются только через таймлок Vault (setTokenRole, 7 дней).
 contract Deploy is Script {
     struct Deployed {
         address usdt;
@@ -37,6 +39,8 @@ contract Deploy is Script {
         uint256 deployerPk;
         address owner;
         address feeRecipient;
+        address guardian;
+        address sequencerUptimeFeed;
         uint256 minMintUsd;
         uint256 initialIndex;
         uint256 basketId;
@@ -56,6 +60,8 @@ contract Deploy is Script {
                 deployerPk: pk,
                 owner: owner,
                 feeRecipient: vm.envOr("FEE_RECIPIENT", owner),
+                guardian: vm.envOr("GUARDIAN_ADDRESS", address(0)),
+                sequencerUptimeFeed: vm.envOr("SEQUENCER_UPTIME_FEED", address(0)),
                 minMintUsd: vm.envOr("MIN_MINT_USD", uint256(50e18)),
                 initialIndex: vm.envOr("INITIAL_INDEX", uint256(1e18)),
                 basketId: vm.envOr("BASKET_ID", uint256(1)),
@@ -74,38 +80,43 @@ contract Deploy is Script {
         console2.log("deployer    ", deployer);
         console2.log("owner       ", owner);
         console2.log("feeRecipient", c.feeRecipient);
+        console2.log("guardian    ", c.guardian);
+        console2.log("seqFeed     ", c.sequencerUptimeFeed);
 
         vm.startBroadcast(c.deployerPk);
         d.usdt = address(new TestUSDT());
         d.usdc = address(new TestUSDC());
         // Vault и токен создаются с деплоером в роли владельца/админа, чтобы настроить их в той же сессии.
-        BasketVault vault = new BasketVault(deployer, c.feeRecipient, d.usdt, d.usdc, c.minMintUsd);
+        BasketVault vault = new BasketVault(
+            deployer, c.feeRecipient, d.usdt, d.usdc, c.minMintUsd, c.guardian, c.sequencerUptimeFeed
+        );
         BasketToken token = new BasketToken("BasketCoin", "BKT", deployer);
         token.grantRole(token.MINTER_ROLE(), address(vault));
         vault.addBasket(c.basketId, token, c.initialIndex);
 
+        token.grantRole(token.DEFAULT_ADMIN_ROLE(), address(vault)); // роли токена — только через таймлок Vault
+        token.renounceRole(token.DEFAULT_ADMIN_ROLE(), deployer);
         if (owner != deployer) {
             vault.transferOwnership(owner); // Ownable2Step: OWNER должен вызвать acceptOwnership()
-            token.grantRole(token.DEFAULT_ADMIN_ROLE(), owner);
-            token.renounceRole(token.DEFAULT_ADMIN_ROLE(), deployer);
         }
         vm.stopBroadcast();
         d.token = address(token);
         d.vault = address(vault);
 
-        _check(d, deployer, owner, c.basketId, c.initialIndex);
+        _check(d, deployer, owner, c);
         _write(d, deployer, c);
     }
 
-    function _check(Deployed memory d, address deployer, address owner, uint256 basketId, uint256 initialIndex)
-        internal
-        view
-    {
+    function _check(Deployed memory d, address deployer, address owner, Config memory c) internal view {
+        uint256 basketId = c.basketId;
+        uint256 initialIndex = c.initialIndex;
         BasketVault vault = BasketVault(d.vault);
         BasketToken token = BasketToken(d.token);
         require(token.hasRole(token.MINTER_ROLE(), d.vault), "vault not minter");
-        require(token.hasRole(token.DEFAULT_ADMIN_ROLE(), owner), "owner not token admin");
-        require(owner == deployer || !token.hasRole(token.DEFAULT_ADMIN_ROLE(), deployer), "deployer still admin");
+        require(token.hasRole(token.DEFAULT_ADMIN_ROLE(), d.vault), "vault not token admin");
+        require(!token.hasRole(token.DEFAULT_ADMIN_ROLE(), deployer), "deployer still admin");
+        require(vault.guardian() == c.guardian, "guardian");
+        require(vault.sequencerUptimeFeed() == c.sequencerUptimeFeed, "sequencer feed");
         require(vault.owner() == deployer, "vault owner");
         require(vault.pendingOwner() == (owner == deployer ? address(0) : owner), "pending owner");
         (, uint256 index, uint256 working,,,) = vault.baskets(basketId);
@@ -123,7 +134,9 @@ contract Deploy is Script {
         vm.serializeAddress(k, "deployer", deployer);
         vm.serializeAddress(k, "vaultOwner", deployer);
         vm.serializeAddress(k, "vaultPendingOwner", owner == deployer ? address(0) : owner);
-        vm.serializeAddress(k, "tokenAdmin", owner);
+        vm.serializeAddress(k, "tokenAdmin", d.vault);
+        vm.serializeAddress(k, "guardian", c.guardian);
+        vm.serializeAddress(k, "sequencerUptimeFeed", c.sequencerUptimeFeed);
         vm.serializeAddress(k, "feeRecipient", c.feeRecipient);
         vm.serializeUint(k, "basketId", c.basketId);
         vm.serializeUint(k, "initialIndex", c.initialIndex);

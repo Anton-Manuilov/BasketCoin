@@ -156,7 +156,7 @@ contract ReentrancyTest is BaseTest {
 
     /// Хук у казны (получатель комиссии) тоже не может войти повторно.
     function test_Reenter_FromFeeRecipientHook() public {
-        vm.prank(owner);
+        vm.prank(address(vault));
         vault.setFeeRecipient(address(attacker));
         attacker.configure(Attacker.Action.Mint, true);
         vm.prank(alice);

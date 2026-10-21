@@ -30,7 +30,7 @@ contract RedeemTiersTest is Test {
         vm.warp(T_OCT19);
         usdt = new MockStable("Tether USD", "USDT", 6);
         usdc = new MockStable("USD Coin", "USDC", 6);
-        vault = new BasketVault(owner, treasury, address(usdt), address(usdc), 50e18);
+        vault = new BasketVault(owner, treasury, address(usdt), address(usdc), 50e18, address(0), address(0));
         coin = new BasketToken("BasketCoin", "BKT", owner);
         vm.startPrank(owner);
         coin.grantRole(coin.MINTER_ROLE(), address(vault));
@@ -256,14 +256,14 @@ contract RedeemTiersTest is Test {
     function test_Transition_ManualStablePriceEmits() public {
         _mint(alice, address(usdt), 1_000e6);
         _expectTier(BasketVault.RedeemTier.Standard, BasketVault.RedeemTier.Suspended);
-        vm.prank(owner);
+        vm.prank(address(vault));
         vault.setManualPrice(address(usdt), 0.955e18); // не депег, но 120% * 0.955 ≈ 114.6%
     }
 
     function test_PokeTier_AfterFeedMove() public {
         _mint(alice, address(usdt), 1_000e6);
         MockFeed feed = new MockFeed(8, 1e8);
-        vm.prank(owner);
+        vm.prank(address(vault));
         vault.setStableFeed(address(usdt), IAggregatorV3(address(feed)), 1 days);
         feed.set(0.955e8, block.timestamp); // меняется без транзакции в Vault
         assertEq(uint256(_tier()), uint256(BasketVault.RedeemTier.Suspended));
@@ -332,7 +332,7 @@ contract RedeemTiersTest is Test {
     function test_Quote_DepegNotExecutable() public {
         uint256 tokens = _mint(alice, address(usdt), 1_000e6);
         _mint(alice, address(usdc), 10_000e6);
-        vm.prank(owner);
+        vm.prank(address(vault));
         vault.setManualPrice(address(usdt), 0.94e18);
         assertFalse(vault.quoteRedeem(BASKET, address(usdt), tokens).executableNow);
         assertTrue(vault.quoteRedeem(BASKET, address(usdc), tokens).executableNow);

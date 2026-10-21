@@ -24,9 +24,16 @@ USDT=$(j .TestUSDT); USDC=$(j .TestUSDC); TOKEN=$(j .BasketToken); VAULT=$(j .Ba
 DEPLOYER=$(j .deployer); FEE=$(j .feeRecipient); MINMINT=$(j .minMintUsd)
 
 # Аргументы конструкторов ровно такие, как в script/Deploy.s.sol:
-#   BasketVault(deployer, feeRecipient, TestUSDT, TestUSDC, minMintUsd)
+#   BasketVault(deployer, feeRecipient, TestUSDT, TestUSDC, minMintUsd, guardian, sequencerUptimeFeed)  — v4+ (этап B)
+#   BasketVault(deployer, feeRecipient, TestUSDT, TestUSDC, minMintUsd)                                 — v1–v3
 #   BasketToken("BasketCoin", "BKT", deployer)
-VAULT_ARGS=$(cast abi-encode "constructor(address,address,address,address,uint256)" "$DEPLOYER" "$FEE" "$USDT" "$USDC" "$MINMINT")
+# Для v1–v3 (в JSON нет поля guardian) проверять нужно коммит до этапа B, иначе байткод не совпадёт.
+if [ "$(j 'has("guardian")')" = "true" ]; then
+  VAULT_ARGS=$(cast abi-encode "constructor(address,address,address,address,uint256,address,address)" \
+    "$DEPLOYER" "$FEE" "$USDT" "$USDC" "$MINMINT" "$(j .guardian)" "$(j .sequencerUptimeFeed)")
+else
+  VAULT_ARGS=$(cast abi-encode "constructor(address,address,address,address,uint256)" "$DEPLOYER" "$FEE" "$USDT" "$USDC" "$MINMINT")
+fi
 TOKEN_ARGS=$(cast abi-encode "constructor(string,string,address)" "BasketCoin" "BKT" "$DEPLOYER")
 
 # адрес | контракт | аргументы конструктора

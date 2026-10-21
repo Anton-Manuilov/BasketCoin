@@ -8,6 +8,8 @@ import {Ownable, Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+import {Address} from "@openzeppelin/contracts/utils/Address.sol";
+import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 
 import {BasketToken} from "./BasketToken.sol";
 import {IAggregatorV3} from "./interfaces/IAggregatorV3.sol";
@@ -81,6 +83,19 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
     /// @notice Верхняя граница индекса и ручной цены стейбла ($1e18 в 18 знаках) — защита от переполнения
     ///         промежуточных произведений; на практике недостижима.
     uint256 public constant MAX_PRICE = 1e36;
+    /// @notice Максимальная длительность одной паузы: по истечении пауза снимается сама (угроза T10).
+    uint256 public constant MAX_PAUSE_DURATION = 30 days;
+    /// @notice После окончания паузы (снятие или истечение) новая пауза возможна не раньше чем через этот срок:
+    ///         гарантированное окно выхода для держателей.
+    uint256 public constant PAUSE_COOLDOWN = 3 days;
+    /// @notice Grace period после восстановления L2-секвенсора (рекомендация Chainlink — 3600 с).
+    uint256 public constant SEQUENCER_GRACE_PERIOD = 1 hours;
+    /// @notice Задержка таймлока для параметров (фид, ручная цена, казна, guardian, фид секвенсора).
+    uint256 public constant PARAM_DELAY = 2 days;
+    /// @notice Задержка таймлока для ролей токенов (MINTER_ROLE / DEFAULT_ADMIN_ROLE): это право эмиссии.
+    uint256 public constant ROLE_DELAY = 7 days;
+    /// @notice Сколько времени после готовности (eta) операцию ещё можно исполнить; потом она протухает.
+    uint256 public constant OP_EXPIRY = 14 days;
 
     /// @notice Уровень выкупа корзины.
     enum RedeemTier {
@@ -171,6 +186,15 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
     /// @notice Минимальный минт, USD 18 знаков.
     uint256 public minMintUsd;
 
+    /// @notice Адрес, который может только поставить паузу (быстрая реакция). Снимает паузу только owner.
+    address public guardian;
+    /// @notice Момент, когда текущая (или последняя) пауза заканчивается/закончилась.
+    uint64 public pausedUntil;
+    /// @notice Chainlink L2 Sequencer Uptime Feed (address(0) — проверка отключена, например в тестнете).
+    address public sequencerUptimeFeed;
+    /// @notice Таймлок: id операции => момент, с которого её можно исполнить (0 — нет заявки).
+    mapping(bytes32 id => uint256 eta) public opEta;
+
     // ---------------------------------------------------------------------
     // События
     // ---------------------------------------------------------------------
@@ -239,6 +263,25 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
     event MinMintUpdated(uint256 oldValue, uint256 newValue);
     /// @notice Изменена казна (в конструкторе oldRecipient = address(0)).
     event FeeRecipientUpdated(address indexed oldRecipient, address indexed newRecipient);
+    /// @notice Сменён guardian паузы (address(0) — отозван).
+    event GuardianUpdated(address indexed oldGuardian, address indexed newGuardian);
+    /// @notice Пауза поставлена до `until` (по истечении снимается сама).
+    event PauseWindow(address indexed by, uint256 until);
+    /// @notice Сменён фид L2 Sequencer Uptime (address(0) — проверка отключена).
+    event SequencerUptimeFeedUpdated(address indexed oldFeed, address indexed newFeed);
+    /// @notice Админская операция поставлена в таймлок.
+    /// @param id keccak256(abi.encode(data, salt))
+    /// @param selector селектор вызываемой функции
+    /// @param data полный calldata вызова
+    /// @param salt соль
+    /// @param eta с какого момента можно исполнить (до eta + OP_EXPIRY)
+    event OpScheduled(bytes32 indexed id, bytes4 indexed selector, bytes data, bytes32 salt, uint256 eta);
+    /// @notice Операция из таймлока исполнена.
+    event OpExecuted(bytes32 indexed id, bytes4 indexed selector);
+    /// @notice Операция из таймлока отменена.
+    event OpCancelled(bytes32 indexed id);
+    /// @notice Через таймлок выдана/отозвана роль на токене корзины.
+    event TokenRoleUpdated(address indexed token, bytes32 indexed role, address indexed account, bool granted);
     /// @notice Минт.
     /// @param stableIn фактически полученная сумма стейбла (до комиссии протокола)
     /// @param fee комиссия протокола в стейбле (ушла в казну)
@@ -323,26 +366,62 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
     error InsufficientReserve(uint256 needed, uint256 available);
     error RenounceDisabled();
     error RedemptionSuspended(uint256 basketId, uint256 coverageBps, uint256 minCoverageBps);
+    error OnlyTimelock();
+    error NotTimelockable(bytes4 selector);
+    error OpAlreadyScheduled(bytes32 id);
+    error OpNotScheduled(bytes32 id);
+    error OpNotReady(bytes32 id, uint256 eta);
+    error OpExpired(bytes32 id, uint256 deadline);
+    error NotOwnerOrGuardian(address caller);
+    error PauseCooldown(uint256 allowedAt);
+    error SequencerDown();
+    error SequencerGracePeriod(uint256 upSince);
+    error SequencerFeedInvalid();
+    error FeedUnavailable(address stable);
+    error TokenNotRegistered(address token);
+
+    /// @dev Функция вызывается только через таймлок: scheduleOp → (задержка) → executeOp.
+    modifier onlyTimelock() {
+        _onlyTimelock();
+        _;
+    }
+
+    function _onlyTimelock() internal view {
+        if (msg.sender != address(this)) revert OnlyTimelock();
+    }
 
     // ---------------------------------------------------------------------
     // Конструктор
     // ---------------------------------------------------------------------
-    /// @param owner_ ключ владельца (Антон): оракул, пауза, параметры
+    /// @param owner_ владелец — Safe 2-of-3: оракул, пауза, таймлок параметров
     /// @param feeRecipient_ казна для комиссий
     /// @param usdt адрес USDT (добавляется сразу, без таймлока)
     /// @param usdc адрес USDC (добавляется сразу, без таймлока)
     /// @param minMintUsd_ минимальный минт, USD 18 знаков, в диапазоне [$50, $1000]
+    /// @param guardian_ guardian паузы (address(0) — нет)
+    /// @param sequencerUptimeFeed_ Chainlink L2 Sequencer Uptime Feed (address(0) — проверка отключена)
     // slither-disable-start missing-zero-check — проверка в _validateFeeRecipient
-    // forge-lint: disable-next-line(missing-zero-check) — проверка в _validateFeeRecipient
-    constructor(address owner_, address feeRecipient_, address usdt, address usdc, uint256 minMintUsd_)
-        Ownable(owner_)
-    {
+    // forge-lint: disable-start(missing-zero-check) — fee: _validateFeeRecipient; guardian/фид: 0 = выключено
+    constructor(
+        address owner_,
+        address feeRecipient_,
+        address usdt,
+        address usdc,
+        uint256 minMintUsd_,
+        address guardian_,
+        address sequencerUptimeFeed_
+    ) Ownable(owner_) {
         _validateFeeRecipient(feeRecipient_);
         if (minMintUsd_ < MIN_MINT_LOWER || minMintUsd_ > MIN_MINT_UPPER) revert MinMintOutOfRange(minMintUsd_);
         feeRecipient = feeRecipient_;
         minMintUsd = minMintUsd_;
         emit FeeRecipientUpdated(address(0), feeRecipient_);
         emit MinMintUpdated(0, minMintUsd_);
+        guardian = guardian_;
+        sequencerUptimeFeed = sequencerUptimeFeed_;
+        emit GuardianUpdated(address(0), guardian_);
+        emit SequencerUptimeFeedUpdated(address(0), sequencerUptimeFeed_);
+        // forge-lint: disable-end(missing-zero-check)
         _addStable(usdt, IAggregatorV3(address(0)), 0, false);
         _addStable(usdc, IAggregatorV3(address(0)), 0, false);
     }
@@ -469,10 +548,11 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
         emit StableProposalCancelled(stable, eta);
     }
 
-    /// @notice Ручная цена стейбла (fallback, если фида нет или он недоступен/устарел/невалиден).
+    /// @notice Ручная цена стейбла. ТАЙМЛОК PARAM_DELAY (2 дня). В mint/redeem используется только у стейбла
+    ///         без фида; у стейбла с фидом — лишь во view/оценке покрытия, когда фид невалиден.
     /// @param stable включённый стейбл
     /// @param price цена, USD 18 знаков (0 < price <= MAX_PRICE)
-    function setManualPrice(address stable, uint256 price) external onlyOwner {
+    function setManualPrice(address stable, uint256 price) external onlyTimelock {
         if (!stables[stable].enabled) revert StableNotEnabled(stable);
         if (price == 0 || price > MAX_PRICE) revert InvalidPrice();
         uint256 oldPrice = stables[stable].manualPrice;
@@ -482,11 +562,11 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
         _syncAllTiers();
     }
 
-    /// @notice Подключить/сменить Chainlink-совместимый фид (address(0) — отключить фид).
+    /// @notice Подключить/сменить Chainlink-совместимый фид (address(0) — отключить фид). ТАЙМЛОК PARAM_DELAY.
     /// @param stable включённый стейбл
     /// @param feed фид
     /// @param maxFeedStaleness допустимый возраст ответа фида, сек
-    function setStableFeed(address stable, IAggregatorV3 feed, uint256 maxFeedStaleness) external onlyOwner {
+    function setStableFeed(address stable, IAggregatorV3 feed, uint256 maxFeedStaleness) external onlyTimelock {
         if (!stables[stable].enabled) revert StableNotEnabled(stable);
         Stable storage s = stables[stable];
         emit StableFeedUpdated(stable, address(s.feed), address(feed), s.maxFeedStaleness, maxFeedStaleness);
@@ -507,25 +587,149 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
         minMintUsd = newMin;
     }
 
-    /// @notice Изменить казну для комиссий (не нулевой адрес и не сам Vault).
+    /// @notice Изменить казну для комиссий (не нулевой адрес и не сам Vault). ТАЙМЛОК PARAM_DELAY.
     /// @param newRecipient новый адрес казны
     // slither-disable-start missing-zero-check — проверка в _validateFeeRecipient
     // forge-lint: disable-next-line(missing-zero-check) — проверка в _validateFeeRecipient
-    function setFeeRecipient(address newRecipient) external onlyOwner {
+    function setFeeRecipient(address newRecipient) external onlyTimelock {
         _validateFeeRecipient(newRecipient);
         emit FeeRecipientUpdated(feeRecipient, newRecipient);
         feeRecipient = newRecipient;
     }
     // slither-disable-end missing-zero-check
 
-    /// @notice Аварийная пауза: останавливает весь минт и выкуп.
-    function pause() external onlyOwner {
-        _pause();
+    /// @notice Аварийная пауза: останавливает весь минт и выкуп. Может owner или guardian.
+    ///         Пауза длится не дольше MAX_PAUSE_DURATION и снимается сама; продлить нельзя. Новая пауза —
+    ///         не раньше чем через PAUSE_COOLDOWN после окончания предыдущей (окно выхода для держателей).
+    function pause() external {
+        if (msg.sender != owner() && msg.sender != guardian) revert NotOwnerOrGuardian(msg.sender);
+        _pause(); // whenNotPaused: во время активной паузы — EnforcedPause (продлить нельзя)
+        uint256 last = pausedUntil;
+        // forge-lint: disable-next-line(block-timestamp)
+        if (last != 0 && block.timestamp < last + PAUSE_COOLDOWN) revert PauseCooldown(last + PAUSE_COOLDOWN);
+        uint256 until = block.timestamp + MAX_PAUSE_DURATION;
+        // forge-lint: disable-next-line(unsafe-typecast)
+        pausedUntil = uint64(until);
+        emit PauseWindow(msg.sender, until);
     }
 
-    /// @notice Снять аварийную паузу.
+    /// @notice Снять аварийную паузу досрочно. Только owner (guardian снять паузу не может).
     function unpause() external onlyOwner {
         _unpause();
+        // forge-lint: disable-next-line(unsafe-typecast)
+        pausedUntil = uint64(block.timestamp);
+    }
+
+    /// @notice Пауза активна: поставлена и ещё не истекла.
+    /// @return true, если mint/redeem сейчас остановлены паузой
+    function paused() public view override returns (bool) {
+        // forge-lint: disable-next-line(block-timestamp)
+        return super.paused() && block.timestamp < pausedUntil;
+    }
+
+    /// @notice Назначить guardian паузы. ТАЙМЛОК PARAM_DELAY.
+    /// @param newGuardian новый guardian (address(0) — без guardian)
+    // slither-disable-start missing-zero-check — address(0) у guardian и фида секвенсора означает «выключено»
+    // forge-lint: disable-next-line(missing-zero-check) — address(0) = без guardian
+    function setGuardian(address newGuardian) external onlyTimelock {
+        emit GuardianUpdated(guardian, newGuardian);
+        guardian = newGuardian;
+    }
+
+    /// @notice Немедленно отозвать guardian (только уменьшает права, поэтому без таймлока).
+    function revokeGuardian() external onlyOwner {
+        emit GuardianUpdated(guardian, address(0));
+        guardian = address(0);
+    }
+
+    /// @notice Подключить/отключить Chainlink L2 Sequencer Uptime Feed. ТАЙМЛОК PARAM_DELAY.
+    /// @param feed адрес фида (address(0) — отключить проверку)
+    // forge-lint: disable-next-line(missing-zero-check) — address(0) = проверка выключена
+    function setSequencerUptimeFeed(address feed) external onlyTimelock {
+        emit SequencerUptimeFeedUpdated(sequencerUptimeFeed, feed);
+        sequencerUptimeFeed = feed;
+    }
+    // slither-disable-end missing-zero-check
+
+    /// @notice Выдать или отозвать роль на токене корзины (Vault должен быть его админом). ТАЙМЛОК ROLE_DELAY.
+    /// @param token зарегистрированный токен корзины
+    /// @param role роль (например MINTER_ROLE или DEFAULT_ADMIN_ROLE)
+    /// @param account адрес
+    /// @param grant true — выдать, false — отозвать
+    function setTokenRole(address token, bytes32 role, address account, bool grant) external onlyTimelock {
+        if (!tokenRegistered[token]) revert TokenNotRegistered(token);
+        emit TokenRoleUpdated(token, role, account, grant);
+        if (grant) IAccessControl(token).grantRole(role, account);
+        else IAccessControl(token).revokeRole(role, account);
+    }
+
+    // ---------------------------------------------------------------------
+    // Таймлок админских операций (schedule → задержка → execute)
+    // ---------------------------------------------------------------------
+    /// @notice Задержка для функции по селектору; 0 — функция не исполняется через таймлок.
+    /// @param selector селектор
+    /// @return delay задержка, с
+    function opDelay(bytes4 selector) public pure returns (uint256 delay) {
+        if (
+            selector == this.setStableFeed.selector || selector == this.setManualPrice.selector
+                || selector == this.setFeeRecipient.selector || selector == this.setGuardian.selector
+                || selector == this.setSequencerUptimeFeed.selector
+        ) return PARAM_DELAY;
+        if (selector == this.setTokenRole.selector) return ROLE_DELAY;
+        return 0;
+    }
+
+    /// @notice id операции таймлока.
+    /// @param data calldata вызова
+    /// @param salt соль (позволяет поставить одинаковый вызов дважды)
+    /// @return id идентификатор
+    function opId(bytes calldata data, bytes32 salt) public pure returns (bytes32) {
+        return keccak256(abi.encode(data, salt));
+    }
+
+    /// @notice Шаг 1: поставить админскую операцию в таймлок. Только owner.
+    /// @param data calldata вызова этого же контракта (например abi.encodeCall(vault.setFeeRecipient, (x)))
+    /// @param salt соль
+    /// @return id идентификатор операции
+    function scheduleOp(bytes calldata data, bytes32 salt) external onlyOwner returns (bytes32 id) {
+        bytes4 sel = data.length >= 4 ? bytes4(data[:4]) : bytes4(0);
+        uint256 delay = opDelay(sel);
+        if (delay == 0) revert NotTimelockable(sel);
+        id = opId(data, salt);
+        if (opEta[id] != 0) revert OpAlreadyScheduled(id);
+        uint256 eta = block.timestamp + delay;
+        opEta[id] = eta;
+        emit OpScheduled(id, sel, data, salt, eta);
+    }
+
+    /// @notice Шаг 2: исполнить операцию в окне [eta, eta + OP_EXPIRY]. Только owner.
+    /// @param data тот же calldata
+    /// @param salt та же соль
+    /// @return result данные возврата
+    function executeOp(bytes calldata data, bytes32 salt)
+        external
+        nonReentrant
+        onlyOwner
+        returns (bytes memory result)
+    {
+        bytes32 id = opId(data, salt);
+        uint256 eta = opEta[id];
+        if (eta == 0) revert OpNotScheduled(id);
+        // forge-lint: disable-next-line(block-timestamp)
+        if (block.timestamp < eta) revert OpNotReady(id, eta);
+        // forge-lint: disable-next-line(block-timestamp)
+        if (block.timestamp > eta + OP_EXPIRY) revert OpExpired(id, eta + OP_EXPIRY);
+        delete opEta[id];
+        emit OpExecuted(id, bytes4(data[:4]));
+        result = Address.functionCall(address(this), data);
+    }
+
+    /// @notice Отменить операцию до исполнения. Только owner.
+    /// @param id идентификатор
+    function cancelOp(bytes32 id) external onlyOwner {
+        if (opEta[id] == 0) revert OpNotScheduled(id);
+        delete opEta[id];
+        emit OpCancelled(id);
     }
 
     /// @notice Отказ от владения запрещён: без owner контракт нельзя снять с паузы и обновить индекс.
@@ -554,6 +758,7 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
         Basket storage b = _basket(basketId);
         Stable storage s = _activeStable(stable);
         if (amount == 0) revert ZeroAmount();
+        _checkSequencer();
         uint256 sPrice = _checkedPrice(stable, s);
         uint256 covBefore = _coverageBps(basketId);
         OpLog memory lg = OpLog({
@@ -639,6 +844,7 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
     {
         Basket storage b = _basket(basketId);
         if (tokenAmount == 0) revert ZeroAmount();
+        _checkSequencer();
         OpLog memory lg;
         uint256 gross;
         (gross, lg) = _checkedRedeem(basketId, stable, tokenAmount);
@@ -810,9 +1016,32 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
         if (!s.enabled) revert StableNotEnabled(stable);
     }
 
+    /// @dev Цена для mint/redeem. Если у стейбла есть фид, он обязан быть валиден (иначе FeedUnavailable):
+    ///      откат на ручную цену здесь запрещён, чтобы сломанный/устаревший фид не скрыл депег (T1/T5).
     function _checkedPrice(address stable, Stable storage s) internal view returns (uint256 p) {
-        p = _price(s);
+        if (address(s.feed) != address(0)) {
+            bool ok;
+            (ok, p) = _readFeed(address(s.feed), s.maxFeedStaleness);
+            if (!ok) revert FeedUnavailable(stable);
+        } else {
+            p = s.manualPrice;
+        }
         if (_isDepegged(p)) revert StableDepegged(stable, p);
+    }
+
+    /// @dev Chainlink L2 Sequencer Uptime: answer 0 — работает, 1 — упал; после восстановления ждём
+    ///      SEQUENCER_GRACE_PERIOD. Невалидный ответ фида — отказ (безопасная сторона).
+    function _checkSequencer() internal view {
+        address feed = sequencerUptimeFeed;
+        if (feed == address(0)) return;
+        (bool ok, uint256 len, uint256[5] memory r) = _staticcallWords5(feed, IAggregatorV3.latestRoundData.selector);
+        if (!ok || len < 160) revert SequencerFeedInvalid();
+        // r = [roundId, answer, startedAt, updatedAt, answeredInRound]
+        if (r[1] == 1) revert SequencerDown();
+        // forge-lint: disable-next-line(block-timestamp)
+        if (r[1] != 0 || r[2] == 0 || r[2] > block.timestamp) revert SequencerFeedInvalid();
+        // forge-lint: disable-next-line(block-timestamp)
+        if (block.timestamp - r[2] <= SEQUENCER_GRACE_PERIOD) revert SequencerGracePeriod(r[2]);
     }
 
     /// @dev Цена 18 знаков: фид, если ответ валиден, иначе ручная цена.
