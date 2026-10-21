@@ -1,6 +1,6 @@
 # 4. Покрытие тестами и Slither
 
-Код этапа B (хеши — `appendix/scope.sha256`), прогон 19.10.2026 на forge 1.8.5 / solc 0.8.24. Сырые выводы: [`appendix/coverage.txt`](appendix/coverage.txt),
+Коммит `ab144a7` (этап B; хеши — `appendix/scope.sha256`), прогон 19.10.2026 на forge 1.8.5 / solc 0.8.24. Сырые выводы: [`appendix/coverage.txt`](appendix/coverage.txt),
 [`appendix/slither.txt`](appendix/slither.txt).
 
 ## 4.1. Тесты

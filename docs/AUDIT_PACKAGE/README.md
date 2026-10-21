@@ -8,7 +8,7 @@
 | Поле | Значение |
 |---|---|
 | Репозиторий | https://github.com/Anton-Manuilov/BasketCoin (публичный) |
-| Коммит для аудита | **коммит «Stage B: guardian pause, admin timelock, L2 sequencer check»** (ветка `main`; пока локальный, хеш — после публикации). Предыдущая заморозка `bdfada3` (до этапа B) устарела |
+| Коммит для аудита | **`ab144a724e66d93b4a2014765886a18273f2d359`** («Stage B: guardian pause, admin timelock, L2 sequencer check», ветка `main`). Код `src/` для аудита — ровно этот коммит; последующие коммиты меняют только документы/деплой. Предыдущая заморозка `bdfada3` (до этапа B) устарела |
 | Код `src/` (кроме `src/testnet/`) | изменён только `BasketVault.sol` (этап B); хеши файлов — [`appendix/scope.sha256`](appendix/scope.sha256) |
 | Компилятор | solc 0.8.24, optimizer on, runs 200, без via-IR (`foundry.toml`) |
 | Зависимости | OpenZeppelin Contracts 5.1.0, forge-std v1.17.0 (git-сабмодули) |
@@ -48,7 +48,7 @@ nSLOC здесь — строки без комментариев и пусты�
 ## Как воспроизвести
 ```bash
 git clone --recursive https://github.com/Anton-Manuilov/BasketCoin && cd BasketCoin
-git checkout <коммит этапа B>
+git checkout ab144a724e66d93b4a2014765886a18273f2d359
 forge build && forge test                      # 230 тестов
 FOUNDRY_PROFILE=ci forge test                  # fuzz 10 000, invariant 1000 × 200
 forge coverage --report summary --no-match-coverage '(test|lib|script)/'
