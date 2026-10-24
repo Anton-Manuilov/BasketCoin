@@ -56,8 +56,8 @@ contract MintLimitHandler is Test {
             uint256 net = (amt - (amt * 30 + 9_999) / 10_000) * 1e12;
             windowUsed += net;
             blockUsed += net;
-            if (windowUsed > windowMaxReserve / 10 + 1e12) vWindowOverCap++;
-            if (blockUsed > blockMaxReserve / 20 + 1e12) vBlockOverCap++;
+            if (windowUsed > windowMaxReserve * 25 / 100 + 1e12) vWindowOverCap++;
+            if (blockUsed > blockMaxReserve / 10 + 1e12) vBlockOverCap++;
         } catch (bytes memory err) {
             bytes4 s = bytes4(err);
             if (

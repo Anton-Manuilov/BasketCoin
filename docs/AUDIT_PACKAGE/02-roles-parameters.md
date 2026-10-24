@@ -86,8 +86,8 @@
 | фид стейбла | нет (`address(0)`) | Chainlink USDT/USD, USDC/USD | любой адрес или 0 | таймлок 2 дня |
 | v5: `mintLimits.floorBps` | — | 15 000 (150%) | 14 000–20 000 | таймлок 2 дня |
 | v5: `mintLimits.taperBps` | — | 16 000 (160%) | floor…floor+3 000 | таймлок 2 дня |
-| v5: `mintLimits.hourCapBps` | — | 1 000 (10% резерва/ч) | 100–5 000 | таймлок 2 дня |
-| v5: `mintLimits.blockCapBps` | — | 500 (5% резерва/блок) | 10…hourCap | таймлок 2 дня |
+| v5: `mintLimits.hourCapBps` | — | 2 500 (25% резерва/ч) | 100–5 000 | таймлок 2 дня |
+| v5: `mintLimits.blockCapBps` | — | 1 000 (10% резерва/блок) | 10…hourCap | таймлок 2 дня |
 
 ## 2.5. Уровни выкупа (`redeemTier(basketId)`)
 
