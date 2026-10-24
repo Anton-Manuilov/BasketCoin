@@ -75,6 +75,8 @@ contract Deploy is Script {
         address deployer = vm.addr(c.deployerPk);
         address owner = c.owner;
         require(owner != address(0) && c.feeRecipient != address(0), "zero address");
+        // v5.1 (L-1): в mainnet Base (8453) обязателен Chainlink L2 Sequencer Uptime Feed
+        if (block.chainid == 8453) require(c.sequencerUptimeFeed != address(0), "sequencer feed required on Base");
 
         console2.log("chainId     ", block.chainid);
         console2.log("deployer    ", deployer);

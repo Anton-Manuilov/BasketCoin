@@ -133,7 +133,8 @@ contract MintLimitsTest is BaseTest {
     // ------------------------------------------------------------ genesis
     function test_Genesis_WithoutTopUp_RevertsFloor() public {
         vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(BasketVault.MintCoverageFloor.selector, BASKET, 12_000, 15_000));
+        // v5.1: понятная ошибка для первого минта — сколько USD не хватает в резерве до пола 150%
+        vm.expectPartialRevert(BasketVault.GenesisTopUpRequired.selector);
         vault.mint(BASKET, address(usdt), 1_000e6, 0);
     }
 
@@ -173,7 +174,8 @@ contract MintLimitsTest is BaseTest {
         vm.prank(bob);
         vm.expectPartialRevert(BasketVault.MintWindowCapExceeded.selector);
         vault.mint(BASKET, address(usdt), chunk, 0);
-        vm.warp((block.timestamp / 3600 + 1) * 3600);
+        // v5.1: окно скользящее — через полный час после минтов лимит восстановлен полностью
+        vm.warp((block.timestamp / 3600 + 2) * 3600);
         _next();
         _mint(bob, address(usdt), chunk);
     }

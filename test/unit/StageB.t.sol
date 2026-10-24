@@ -433,8 +433,14 @@ contract StageBTest is BaseTest {
     }
 
     function test_Sequencer_EOAFeedInvalid_AndDisable() public {
-        _timelocked(abi.encodeCall(BasketVault.setSequencerUptimeFeed, (makeAddr("eoa"))));
-        _expectSeqInvalid();
+        // v5.1: EOA/неотвечающий фид отклоняется уже при установке
+        bytes memory data = abi.encodeCall(BasketVault.setSequencerUptimeFeed, (makeAddr("eoa")));
+        _schedule(data, SALT);
+        vm.warp(block.timestamp + vault.opDelay(bytes4(data)));
+        vm.prank(owner);
+        vm.expectRevert(BasketVault.SequencerFeedInvalid.selector);
+        vault.executeOp(data, SALT);
+        assertEq(vault.sequencerUptimeFeed(), address(0));
         _timelocked(abi.encodeCall(BasketVault.setSequencerUptimeFeed, (address(0))));
         _mint(alice, address(usdt), 100e6);
     }

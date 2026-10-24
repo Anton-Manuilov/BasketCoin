@@ -20,6 +20,8 @@ contract MintLimitHandler is Test {
     uint256 public vUnexpectedMintRevert;
     uint256 public mintsOk;
     uint256 public mintsLimited;
+    uint256 public vMintDuringFreeze; // v5.1: успешный минт в окне заморозки перед 28-м
+    uint256 public mintsFrozen;
 
     uint256 internal curWindow;
     uint256 internal windowUsed;
@@ -49,9 +51,11 @@ contract MintLimitHandler is Test {
         if (block.number != curBlock) (curBlock, blockUsed, blockMaxReserve) = (block.number, 0, 0);
         if (r > windowMaxReserve) windowMaxReserve = r;
         if (r > blockMaxReserve) blockMaxReserve = r;
+        bool frozen = vault.isMintFrozen(1);
         vm.prank(a);
         try vault.mint(1, address(usdt), amt, 0) {
             mintsOk++;
+            if (frozen) vMintDuringFreeze++;
             if (vault.collateralRatioBps(1) < 15_000) vBelowFloor++;
             uint256 net = (amt - (amt * 30 + 9_999) / 10_000) * 1e12;
             windowUsed += net;
@@ -64,6 +68,7 @@ contract MintLimitHandler is Test {
                 s == BasketVault.MintWindowCapExceeded.selector || s == BasketVault.MintBlockCapExceeded.selector
                     || s == BasketVault.MintCoverageFloor.selector
             ) mintsLimited++;
+            else if (s == BasketVault.MintFrozenBeforeIndex.selector && frozen) mintsFrozen++;
             else vUnexpectedMintRevert++;
         }
     }
@@ -87,6 +92,14 @@ contract MintLimitHandler is Test {
         bps = bound(bps, 9_700, 10_300);
         vm.prank(owner);
         try vault.setWorkingPrice(1, 1e18 * bps / 10_000) {} catch {}
+    }
+
+    /// v5.1: фиксация индекса 28-го (±1%), снимает заморозку месяца
+    function setIndex(uint256 bps) external {
+        bps = bound(bps, 9_900, 10_100);
+        (, uint256 idx,,,,) = vault.baskets(1);
+        vm.prank(owner);
+        try vault.setIndex(1, idx * bps / 10_000) {} catch {}
     }
 
     function advance(uint256 secs) external {
@@ -137,6 +150,10 @@ contract MintLimitsInvariantTest is Test {
     function invariant_WindowAndBlockCaps() public view {
         assertEq(h.vWindowOverCap(), 0);
         assertEq(h.vBlockOverCap(), 0);
+    }
+
+    function invariant_NoMintDuringFreeze() public view {
+        assertEq(h.vMintDuringFreeze(), 0);
     }
 
     function invariant_OnlyLimitReverts() public view {

@@ -117,6 +117,11 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
     uint256 public constant MINT_HOUR_CAP_MAX_BPS = 5_000;
     /// @notice Лимит за блок: от 0,1% резерва и не больше часового.
     uint256 public constant MINT_BLOCK_CAP_MIN_BPS = 10;
+    /// @notice v5.1 (M1): заморозка минта перед окном setIndex 28-го. По умолчанию 6 ч, максимум 2 дня.
+    ///         Заморозка действует с (28-е 00:00 UTC − mintFreezeSec) до фиксации индекса этого месяца
+    ///         (или до конца 28-го, если индекс в этом месяце не меняли). Выкуп не замораживается.
+    uint256 public constant DEFAULT_MINT_FREEZE = 6 hours;
+    uint256 public constant MAX_MINT_FREEZE = 2 days;
 
     /// @notice Уровень выкупа корзины.
     enum RedeemTier {
@@ -230,12 +235,15 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
         uint64 blockNumber;
         uint256 windowUsedUsd;
         uint256 blockUsedUsd;
+        uint256 prevWindowUsedUsd; // v5.1: использовано в предыдущем окне (скользящее окно)
     }
 
     /// @notice v5: текущие параметры ограничителя минта.
     MintLimits public mintLimits;
     /// @notice v5: учёт лимитов по корзинам.
     mapping(uint256 basketId => MintWindow) public mintWindows;
+    /// @notice v5.1 (M1): длительность заморозки минта перед 28-м числом, с (0 — выключено). Таймлок PARAM_DELAY.
+    uint256 public mintFreezeSec;
 
     // ---------------------------------------------------------------------
     // События
@@ -382,6 +390,8 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
 
     /// @notice v5: изменены параметры ограничителя минта.
     event MintLimitsUpdated(uint256 floorBps, uint256 taperBps, uint256 hourCapBps, uint256 blockCapBps);
+    /// @notice v5.1: изменена длительность заморозки минта перед setIndex.
+    event MintFreezeUpdated(uint256 oldSec, uint256 newSec);
 
     // ---------------------------------------------------------------------
     // Ошибки
@@ -429,6 +439,10 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
     error MintCoverageFloor(uint256 basketId, uint256 coverageAfterBps, uint256 floorBps);
     error MintWindowCapExceeded(uint256 basketId, uint256 usdIn, uint256 remainingUsd);
     error MintBlockCapExceeded(uint256 basketId, uint256 usdIn, uint256 remainingUsd);
+    // v5.1
+    error MintFrozenBeforeIndex(uint256 basketId, uint256 year, uint256 month);
+    error MintFreezeOutOfRange(uint256 sec);
+    error GenesisTopUpRequired(uint256 basketId, uint256 missingUsd);
 
     /// @dev Функция вызывается только через таймлок: scheduleOp → (задержка) → executeOp.
     modifier onlyTimelock() {
@@ -474,6 +488,8 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
         _setMintLimits(
             DEFAULT_MINT_FLOOR_BPS, DEFAULT_MINT_TAPER_BPS, DEFAULT_MINT_HOUR_CAP_BPS, DEFAULT_MINT_BLOCK_CAP_BPS
         );
+        mintFreezeSec = DEFAULT_MINT_FREEZE;
+        emit MintFreezeUpdated(0, DEFAULT_MINT_FREEZE);
         // forge-lint: disable-end(missing-zero-check)
         _addStable(usdt, IAggregatorV3(address(0)), 0, false);
         _addStable(usdc, IAggregatorV3(address(0)), 0, false);
@@ -701,6 +717,12 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
     /// @param feed адрес фида (address(0) — отключить проверку)
     // forge-lint: disable-next-line(missing-zero-check) — address(0) = проверка выключена
     function setSequencerUptimeFeed(address feed) external onlyTimelock {
+        if (feed != address(0)) {
+            // v5.1: новый фид обязан отвечать в формате latestRoundData (EOA/чужой контракт — отказ)
+            (bool ok, uint256 len,) = _staticcallWords5(feed, IAggregatorV3.latestRoundData.selector);
+            if (!ok || len < 160) revert SequencerFeedInvalid();
+        }
+        // forge-lint: disable-next-line(reentrancy-events) — выше только staticcall (view)
         emit SequencerUptimeFeedUpdated(sequencerUptimeFeed, feed);
         sequencerUptimeFeed = feed;
     }
@@ -732,6 +754,34 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
         _setMintLimits(floorBps, taperBps, hourCapBps, blockCapBps);
     }
 
+    /// @notice v5.1 (M1): длительность заморозки минта перед setIndex, [0, 2 дня]. Только через таймлок.
+    /// @param sec секунды до 28-го 00:00 UTC, с которых минт закрыт (0 — выключить)
+    function setMintFreeze(uint256 sec) external onlyTimelock {
+        if (sec > MAX_MINT_FREEZE) revert MintFreezeOutOfRange(sec);
+        emit MintFreezeUpdated(mintFreezeSec, sec);
+        mintFreezeSec = sec;
+    }
+
+    /// @notice v5.1 (M1): закрыт ли сейчас минт корзины из-за предстоящей/незавершённой фиксации индекса.
+    /// @param basketId корзина
+    /// @return frozen true — минт откатится MintFrozenBeforeIndex
+    function isMintFrozen(uint256 basketId) public view returns (bool frozen) {
+        (frozen,,) = _mintFreeze(baskets[basketId]);
+    }
+
+    function _mintFreeze(Basket storage b) internal view returns (bool, uint256, uint256) {
+        uint256 f = mintFreezeSec;
+        if (f == 0) return (false, 0, 0);
+        (uint256 y, uint256 m, uint256 d) = DateLib.timestampToDate(block.timestamp);
+        if (d != INDEX_UPDATE_DAY) {
+            (y, m, d) = DateLib.timestampToDate(block.timestamp + f);
+            if (d != INDEX_UPDATE_DAY) return (false, 0, 0);
+        }
+        // slither-disable-next-line incorrect-equality — сравнение ключей месяца
+        if (b.lastIndexMonthKey == y * 12 + (m - 1)) return (false, 0, 0); // индекс этого месяца уже зафиксирован
+        return (true, y, m);
+    }
+
     function _setMintLimits(uint256 floorBps, uint256 taperBps, uint256 hourCapBps, uint256 blockCapBps) internal {
         if (
             floorBps < MINT_FLOOR_MIN_BPS || floorBps > MINT_FLOOR_MAX_BPS || taperBps < floorBps
@@ -760,11 +810,29 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
         (uint256 wCap, uint256 bCap) = _mintCaps(basketId, _coverageBps(basketId));
         MintWindow storage w = mintWindows[basketId];
         // slither-disable-next-line incorrect-equality — сравнение номеров окна/блока, не балансов
-        uint256 wUsed = w.window == block.timestamp / MINT_WINDOW ? w.windowUsedUsd : 0;
+        uint256 win = block.timestamp / MINT_WINDOW;
+        uint256 wUsed = 0;
+        // forge-lint: disable-next-line(block-timestamp)
+        // slither-disable-next-line incorrect-equality — номера окон, не балансы
+        if (w.window == win) wUsed = w.windowUsedUsd + _carried(w.prevWindowUsedUsd);
+        // slither-disable-next-line incorrect-equality — номера окон, не балансы
+        else if (w.window + 1 == win) wUsed = _carried(w.windowUsedUsd);
         // slither-disable-next-line incorrect-equality — сравнение номеров окна/блока, не балансов
         uint256 bUsed = w.blockNumber == block.number ? w.blockUsedUsd : 0;
         windowRemainingUsd = wCap > wUsed ? wCap - wUsed : 0;
         blockRemainingUsd = bCap > bUsed ? bCap - bUsed : 0;
+    }
+
+    /// @dev Сколько USD (по min(p,$1)) не хватает в резерве, чтобы покрытие достигло пола (после минта).
+    function _genesisMissingUsd(Basket storage b, uint256 basketId) internal view returns (uint256) {
+        uint256 need = Math.mulDiv(
+            Math.mulDiv(b.token.totalSupply(), b.workingPrice, 1e18, Math.Rounding.Ceil),
+            mintLimits.floorBps,
+            BPS,
+            Math.Rounding.Ceil
+        );
+        uint256 have = _reserveUsd(basketId);
+        return need > have ? need - have : 0;
     }
 
     /// @dev Лимиты окна и блока в USD: доля резерва * коэффициент сужения.
@@ -779,6 +847,16 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
         bCap = Math.mulDiv(reserveUsd, uint256(m.blockCapBps) * f, BPS * BPS);
     }
 
+    /// @dev Вес предыдущего окна: prev * (оставшаяся доля текущего окна).
+    function _carried(uint256 prev) internal view returns (uint256) {
+        if (prev == 0) return 0;
+        // forge-lint: disable-next-line(weak-prng) — не случайность: позиция внутри часового окна
+        // slither-disable-next-line weak-prng
+        // aderyn-ignore-next-line(weak-randomness)
+        uint256 elapsed = block.timestamp % MINT_WINDOW;
+        return Math.mulDiv(prev, MINT_WINDOW - elapsed, MINT_WINDOW, Math.Rounding.Ceil);
+    }
+
     /// @dev Проверка и учёт лимитов окна/блока до минта. Первый минт в пустую корзину (supply == 0)
     ///      лимитами скорости не ограничен — мерить нечем; пол покрытия к нему всё равно применяется.
     function _consumeMintCaps(uint256 basketId, uint256 covBefore, uint256 usdIn) internal {
@@ -788,6 +866,9 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
         MintWindow storage w = mintWindows[basketId];
         uint64 win = uint64(block.timestamp / MINT_WINDOW);
         if (w.window != win) {
+            // v5.1 (L-2): скользящее окно — предыдущее окно учитывается с линейно убывающим весом
+            // slither-disable-next-line incorrect-equality — номера окон, не балансы
+            w.prevWindowUsedUsd = w.window + 1 == win ? w.windowUsedUsd : 0;
             w.window = win;
             w.windowUsedUsd = 0;
         }
@@ -797,8 +878,10 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
             w.blockUsedUsd = 0;
         }
         uint256 wNew = w.windowUsedUsd + usdIn;
-        if (wNew > wCap) {
-            revert MintWindowCapExceeded(basketId, usdIn, wCap > w.windowUsedUsd ? wCap - w.windowUsedUsd : 0);
+        uint256 carried = _carried(w.prevWindowUsedUsd);
+        if (wNew + carried > wCap) {
+            uint256 usedEff = w.windowUsedUsd + carried;
+            revert MintWindowCapExceeded(basketId, usdIn, wCap > usedEff ? wCap - usedEff : 0);
         }
         uint256 bNew = w.blockUsedUsd + usdIn;
         if (bNew > bCap) {
@@ -819,6 +902,7 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
             selector == this.setStableFeed.selector || selector == this.setManualPrice.selector
                 || selector == this.setFeeRecipient.selector || selector == this.setGuardian.selector
                 || selector == this.setSequencerUptimeFeed.selector || selector == this.setMintLimits.selector
+                || selector == this.setMintFreeze.selector
         ) return PARAM_DELAY;
         if (selector == this.setTokenRole.selector) return ROLE_DELAY;
         return 0;
@@ -841,7 +925,10 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
         uint256 delay = opDelay(sel);
         if (delay == 0) revert NotTimelockable(sel);
         id = opId(data, salt);
-        if (opEta[id] != 0) revert OpAlreadyScheduled(id);
+        uint256 prev = opEta[id];
+        // v5.1 (L-3): протухшую заявку можно поставить заново с той же солью
+        // forge-lint: disable-next-line(block-timestamp)
+        if (prev != 0 && block.timestamp <= prev + OP_EXPIRY) revert OpAlreadyScheduled(id);
         uint256 eta = block.timestamp + delay;
         opEta[id] = eta;
         emit OpScheduled(id, sel, data, salt, eta);
@@ -904,6 +991,10 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
         Stable storage s = _activeStable(stable);
         if (amount == 0) revert ZeroAmount();
         _checkSequencer();
+        {
+            (bool frozen, uint256 fy, uint256 fm) = _mintFreeze(b);
+            if (frozen) revert MintFrozenBeforeIndex(basketId, fy, fm);
+        }
         uint256 sPrice = _checkedPrice(stable, s);
         uint256 covBefore = _coverageBps(basketId);
         OpLog memory lg = OpLog({
@@ -937,7 +1028,11 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
         // v5: пол покрытия после минта
         uint256 floorBps = mintLimits.floorBps;
         // slither-disable-next-line reentrancy-balance — coverageAfter считается после mint доверенного BasketToken под nonReentrant
-        if (lg.coverageAfter < floorBps) revert MintCoverageFloor(basketId, lg.coverageAfter, floorBps);
+        if (lg.coverageAfter < floorBps) {
+            // slither-disable-next-line incorrect-equality — признак genesis (supply до минта был 0), не баланс
+            if (covBefore == type(uint256).max) revert GenesisTopUpRequired(basketId, _genesisMissingUsd(b, basketId));
+            revert MintCoverageFloor(basketId, lg.coverageAfter, floorBps);
+        }
         _emitMinted(basketId, stable, b.workingPrice, lg);
         _syncTierAt(basketId, lg.coverageAfter);
     }
@@ -1333,9 +1428,19 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
             uint256 r = reserves[basketId][st];
             if (r == 0) continue;
             Stable storage s = stables[st];
-            uint256 p = _price(s);
+            uint256 p = _coveragePrice(s);
+            if (p == 0) continue;
             usd += _toUsd(r, s.decimals, p < ONE_USD ? p : ONE_USD);
         }
+    }
+
+    /// @dev v5.1 (M3): цена для оценки покрытия. Стейбл без фида — ручная цена. Стейбл с фидом, когда фид
+    ///      невалиден (сломан/устарел/неполный раунд), — худший случай: 0 (резерв не засчитывается), чтобы
+    ///      выкуп по 1,2P (FULL) и минт не проходили по завышенному покрытию.
+    function _coveragePrice(Stable storage s) internal view returns (uint256) {
+        if (address(s.feed) == address(0)) return s.manualPrice;
+        (bool ok, uint256 p) = _readFeed(address(s.feed), s.maxFeedStaleness);
+        return ok ? p : 0;
     }
 
     function _tierOf(uint256 coverageBps) internal pure returns (RedeemTier) {

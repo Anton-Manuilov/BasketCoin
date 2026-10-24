@@ -39,7 +39,9 @@ contract BoundariesTest is BaseTest {
         _topUpTo(14_001, address(usdc));
         assertEq(_cov(), 14_001);
         _assertTier(FULL);
-        assertEq(_redeem(alice, address(usdt), t), ((t * 12_000 / 10_000) / 1e12) - _ceilFee((t * 12_000 / 10_000) / 1e12));
+        assertEq(
+            _redeem(alice, address(usdt), t), ((t * 12_000 / 10_000) / 1e12) - _ceilFee((t * 12_000 / 10_000) / 1e12)
+        );
     }
 
     function test_140_OneWeiBelowAndExact() public {
@@ -275,10 +277,14 @@ contract BoundariesTest is BaseTest {
         feed.set(0.955e8, block.timestamp);
         _expectTier(BASKET, STD, SUS);
         vault.pokeTier(BASKET);
-        // фид устарел → ручная цена $1 → STANDARD
+        // v5.1 (M3): фид устарел → худший случай (резерв USDT не засчитывается) → остаётся SUSPENDED,
+        // ручная цена $1 больше не завышает покрытие
         vm.warp(block.timestamp + 1 hours + 1);
-        _expectTier(BASKET, SUS, STD);
+        vm.recordLogs();
         vault.pokeTier(BASKET);
+        assertEq(vm.getRecordedLogs().length, 0, "no tier change on stale feed");
+        assertEq(uint256(_tier()), uint256(SUS));
+        assertEq(_cov(), 0);
     }
 
     function test_PokeTier_NoEventWhenUnchanged_AndUnknownBasket() public {
