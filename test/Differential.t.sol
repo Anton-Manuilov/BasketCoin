@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {V4Mode} from "./utils/V4Mode.sol";
 import {BaseTest} from "./utils/BaseTest.sol";
 import {Test} from "forge-std/Test.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
@@ -34,6 +35,9 @@ contract DifferentialRoundingTest is BaseTest {
     /// создаётся сразу с индексом p (стартовый индекс лимитом не ограничен). Вызывать в начале теста.
     function _setIndex(uint256 p) internal {
         vault = new BasketVault(owner, treasury, address(usdt), address(usdc), 50e18, address(0), address(0));
+        // v5: регрессия v4 — ограничитель минта выключен через vm.store (в контракте это невозможно:
+        // setMintLimits держит безопасные границы). Лимиты v5 покрыты отдельно в test/unit/MintLimits.t.sol.
+        V4Mode.disableMintLimits(address(vault));
         coin = new BasketToken("BasketCoin", "BKT", owner);
         vm.startPrank(owner);
         coin.grantRole(coin.MINTER_ROLE(), address(vault));

@@ -1,0 +1,85 @@
+'forge clean' running (wd: /workspace/bkt-v5)
+'forge config --json' running
+'forge build --build-info --deny never --skip ./test/** ./script/** --force' running (wd: /workspace/bkt-v5)
+INFO:Detectors:
+Detector: calls-loop
+BasketVault._coverageBps(uint256) (src/BasketVault.sol#1317-1326) has external calls inside a loop: supply = b.token.totalSupply() (src/BasketVault.sol#1320)
+	Calls stack containing the loop:
+		BasketVault.setManualPrice(address,uint256)
+		BasketVault._syncAllTiers()
+		BasketVault._syncTier(uint256)
+BasketVault._coverageBps(uint256) (src/BasketVault.sol#1317-1326) has external calls inside a loop: supply = b.token.totalSupply() (src/BasketVault.sol#1320)
+	Calls stack containing the loop:
+		BasketVault.setStableFeed(address,IAggregatorV3,uint256)
+		BasketVault._syncAllTiers()
+		BasketVault._syncTier(uint256)
+BasketVault._coverageBps(uint256) (src/BasketVault.sol#1317-1326) has external calls inside a loop: supply = b.token.totalSupply() (src/BasketVault.sol#1320)
+	Calls stack containing the loop:
+		BasketVault.pokeStable(address)
+		BasketVault._syncAllTiers()
+		BasketVault._syncTier(uint256)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation/#calls-inside-a-loop
+INFO:Detectors:
+Detector: reentrancy-benign
+Reentrancy in BasketVault.mint(uint256,address,uint256,uint256) (src/BasketVault.sol#897-943):
+	External calls:
+	- b.token.mint(msg.sender,tokensOut) (src/BasketVault.sol#933)
+	State variables written after the call(s):
+	- _syncDepeg(stable,lg.stablePrice) (src/BasketVault.sol#935)
+		- lastDepegged[stable] = now_ (src/BasketVault.sol#1373)
+	- _syncTierAt(basketId,lg.coverageAfter) (src/BasketVault.sol#942)
+		- lastTier[basketId] = newTier (src/BasketVault.sol#1356)
+Reentrancy in BasketVault.redeem(uint256,address,uint256,uint256) (src/BasketVault.sol#992-1020):
+	External calls:
+	- b.token.burn(msg.sender,tokenAmount) (src/BasketVault.sol#1012)
+	State variables written after the call(s):
+	- _syncDepeg(stable,lg.stablePrice) (src/BasketVault.sol#1016)
+		- lastDepegged[stable] = now_ (src/BasketVault.sol#1373)
+	- _syncTierAt(basketId,lg.coverageAfter) (src/BasketVault.sol#1019)
+		- lastTier[basketId] = newTier (src/BasketVault.sol#1356)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#reentrancy-vulnerabilities-3
+INFO:Detectors:
+Detector: timestamp
+BasketVault.setIndex(uint256,uint256) (src/BasketVault.sol#525-549) uses timestamp for comparisons
+	Dangerous comparisons:
+	- d != INDEX_UPDATE_DAY (src/BasketVault.sol#529)
+	- b.lastIndexMonthKey == key (src/BasketVault.sol#532)
+BasketVault.executeStable(address) (src/BasketVault.sol#586-594) uses timestamp for comparisons
+	Dangerous comparisons:
+	- block.timestamp < p.executeAfter (src/BasketVault.sol#590)
+BasketVault.pause() (src/BasketVault.sol#659-669) uses timestamp for comparisons
+	Dangerous comparisons:
+	- last != 0 && block.timestamp < last + PAUSE_COOLDOWN (src/BasketVault.sol#664)
+BasketVault.paused() (src/BasketVault.sol#680-683) uses timestamp for comparisons
+	Dangerous comparisons:
+	- super.paused() && block.timestamp < pausedUntil (src/BasketVault.sol#682)
+BasketVault.mintCapacity(uint256) (src/BasketVault.sol#753-768) uses timestamp for comparisons
+	Dangerous comparisons:
+	- w.window == block.timestamp / MINT_WINDOW (src/BasketVault.sol#763)
+BasketVault._consumeMintCaps(uint256,uint256,uint256) (src/BasketVault.sol#784-809) uses timestamp for comparisons
+	Dangerous comparisons:
+	- baskets[basketId].token.totalSupply() == 0 (src/BasketVault.sol#786)
+	- w.window != win (src/BasketVault.sol#790)
+BasketVault.executeOp(bytes,bytes32) (src/BasketVault.sol#854-870) uses timestamp for comparisons
+	Dangerous comparisons:
+	- block.timestamp < eta (src/BasketVault.sol#864)
+	- block.timestamp > eta + OP_EXPIRY (src/BasketVault.sol#866)
+BasketVault.quoteRedeem(uint256,address,uint256) (src/BasketVault.sol#1074-1096) uses timestamp for comparisons
+	Dangerous comparisons:
+	- q.executableNow = q.tier != RedeemTier.Suspended && ! paused() && ! _isDepegged(p) && gross <= q.reserveAvailable && q.payoutNow > 0 && tokenAmount <= b.token.totalSupply() (src/BasketVault.sol#1094-1095)
+BasketVault._checkSequencer() (src/BasketVault.sol#1187-1198) uses timestamp for comparisons
+	Dangerous comparisons:
+	- r[1] != 0 || r[2] == 0 || r[2] > block.timestamp (src/BasketVault.sol#1195)
+	- block.timestamp - r[2] <= SEQUENCER_GRACE_PERIOD (src/BasketVault.sol#1197)
+BasketVault._readFeed(address,uint256) (src/BasketVault.sol#1215-1234) uses timestamp for comparisons
+	Dangerous comparisons:
+	- updatedAt == 0 || updatedAt > block.timestamp || block.timestamp - updatedAt > maxStaleness (src/BasketVault.sol#1227)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#block-timestamp
+INFO:Detectors:
+Detector: assembly
+BasketVault._staticcallWords5(address,bytes4) (src/BasketVault.sol#1237-1248) uses assembly
+	- INLINE ASM (src/BasketVault.sol#1243-1247)
+BasketVault._staticcallWord(address,bytes4) (src/BasketVault.sol#1251-1263) uses assembly
+	- INLINE ASM (src/BasketVault.sol#1257-1262)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#assembly-usage
+INFO:Slither:. analyzed (29 contracts with 102 detectors), 17 result(s) found

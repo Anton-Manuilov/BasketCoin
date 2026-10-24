@@ -115,6 +115,8 @@ contract EventsTest is BaseTest {
         vm.expectEmit(true, true, true, true);
         emit BasketVault.SequencerUptimeFeedUpdated(address(0), address(0));
         vm.expectEmit(true, true, true, true);
+        emit BasketVault.MintLimitsUpdated(15_000, 16_000, 1_000, 500);
+        vm.expectEmit(true, true, true, true);
         emit BasketVault.StableAdded(address(usdt), 6, address(0), 0, false);
         vm.expectEmit(true, true, true, true);
         emit BasketVault.StableAdded(address(usdc), 6, address(0), 0, false);
@@ -124,7 +126,7 @@ contract EventsTest is BaseTest {
         for (uint256 i; i < logs.length; ++i) {
             if (logs[i].emitter == address(v)) ++n;
         }
-        assertEq(n, 7, "exactly 7 events from the new vault");
+        assertEq(n, 8, "exactly 8 events from the new vault (v5: +MintLimitsUpdated)");
     }
 
     // ------------------------------------------------------------ корзина
@@ -519,7 +521,7 @@ contract EventsTest is BaseTest {
         vault.pokeStable(address(usdc)); // кто угодно
         _assertVaultSigs(_s(SIG_DEPEG)); // только депег, без CoverageTierChanged
 
-        f.set(0.80e8, block.timestamp); // дальше вниз: 108,0% → Suspended; статус депега не меняется
+        f.set(0.8e8, block.timestamp); // дальше вниз: 108,0% → Suspended; статус депега не меняется
         vm.recordLogs();
         vm.expectEmit(address(vault));
         emit BasketVault.CoverageTierChanged(BASKET, STD, SUS, vault.collateralRatioBps(BASKET));
