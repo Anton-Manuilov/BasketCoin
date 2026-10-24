@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {V4Mode} from "../utils/V4Mode.sol";
 import {Test, console} from "forge-std/Test.sol";
 import {BasketVault} from "../../src/BasketVault.sol";
 import {BasketToken} from "../../src/BasketToken.sol";
@@ -24,6 +25,9 @@ abstract contract InvariantBase is Test {
         MockStable usdc = new MockStable("USD Coin", "USDC", 6);
         MockStable dai = new MockStable("Dai", "DAI", 18);
         vault = new BasketVault(owner, treasury, address(usdt), address(usdc), 50e18, address(0), address(0));
+        // v5: регрессия v4 — ограничитель минта выключен через vm.store (в контракте это невозможно:
+        // setMintLimits держит безопасные границы). Лимиты v5 покрыты отдельно в test/unit/MintLimits.t.sol.
+        V4Mode.disableMintLimits(address(vault));
         feed = new MockFeed(8, 1e8);
         toks[0] = new BasketToken("BasketCoin", "BKT", owner);
         toks[1] = new BasketToken("BasketCoin EUR", "BKT-EUR", owner);

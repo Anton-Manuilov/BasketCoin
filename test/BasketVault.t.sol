@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {V4Mode} from "./utils/V4Mode.sol";
 import {Test} from "forge-std/Test.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
@@ -41,6 +42,9 @@ contract BasketVaultTest is Test {
         usdt = new MockStable("Tether USD", "USDT", 6);
         usdc = new MockStable("USD Coin", "USDC", 6);
         vault = new BasketVault(owner, treasury, address(usdt), address(usdc), 50e18, address(0), address(0));
+        // v5: регрессия v4 — ограничитель минта выключен через vm.store (в контракте это невозможно:
+        // setMintLimits держит безопасные границы). Лимиты v5 покрыты отдельно в test/unit/MintLimits.t.sol.
+        V4Mode.disableMintLimits(address(vault));
         coin = new BasketToken("BasketCoin", "BKT", owner);
 
         vm.startPrank(owner);
