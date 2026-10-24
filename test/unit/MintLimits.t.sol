@@ -6,7 +6,7 @@ import {BaseTest} from "../utils/BaseTest.sol";
 import {V4Mode} from "../utils/V4Mode.sol";
 import {BasketVault} from "../../src/BasketVault.sol";
 
-/// v5: ограничитель минта — пол покрытия 150%, сужение 160%→150%, 25%/ч и 10%/блок резерва, таймлок параметров.
+/// v5: ограничитель минта — пол покрытия 150%, сужение 160%→150%, 10%/ч и 5%/блок резерва, таймлок параметров.
 contract MintLimitsTest is BaseTest {
     function _v4RegressionMode() internal pure override returns (bool) {
         return false;
@@ -56,11 +56,11 @@ contract MintLimitsTest is BaseTest {
         (uint32 f, uint32 t, uint32 h, uint32 b) = vault.mintLimits();
         assertEq(f, 15_000);
         assertEq(t, 16_000);
-        assertEq(h, 2_500);
-        assertEq(b, 1_000);
+        assertEq(h, 1_000);
+        assertEq(b, 500);
         // слот, который использует V4Mode в регрессионных тестах v4
         uint256 packed = uint256(vm.load(address(vault), bytes32(V4Mode.MINT_LIMITS_SLOT)));
-        assertEq(packed, 15_000 | (16_000 << 32) | (2_500 << 64) | (1_000 << 96));
+        assertEq(packed, 15_000 | (16_000 << 32) | (1_000 << 64) | (500 << 96));
     }
 
     function test_SetMintLimits_OnlyViaTimelock() public {
@@ -141,8 +141,8 @@ contract MintLimitsTest is BaseTest {
         // первый минт ($1M) больше любого лимита скорости, но supply == 0 — лимиты окна/блока не применяются
         _genesis(19_500);
         (uint256 w, uint256 b) = vault.mintCapacity(BASKET);
-        assertApproxEqRel(w, _reserveUsd() * 25 / 100, 1e14);
-        assertApproxEqRel(b, _reserveUsd() / 10, 1e14);
+        assertApproxEqRel(w, _reserveUsd() / 10, 1e14);
+        assertApproxEqRel(b, _reserveUsd() / 20, 1e14);
     }
 
     // ------------------------------------------------------------ блок и окно
@@ -150,7 +150,7 @@ contract MintLimitsTest is BaseTest {
         _genesis(19_500);
         _next();
         uint256 r = _reserveUsd();
-        uint256 chunk = r / 1e12 * 8 / 100; // 8% резерва
+        uint256 chunk = r / 1e12 * 4 / 100; // 4% резерва
         _mint(bob, address(usdt), chunk);
         vm.prank(bob);
         vm.expectPartialRevert(BasketVault.MintBlockCapExceeded.selector);
@@ -163,12 +163,12 @@ contract MintLimitsTest is BaseTest {
         _genesis(19_500);
         vm.warp((block.timestamp / 3600 + 1) * 3600); // начало окна
         _next();
-        uint256 chunk = _reserveUsd() / 1e12 * 8 / 100; // 8% резерва (до минтов)
+        uint256 chunk = _reserveUsd() / 1e12 * 3 / 100; // 3% резерва (до минтов)
         _mint(bob, address(usdt), chunk);
         _next();
         _mint(bob, address(usdt), chunk);
         _next();
-        _mint(bob, address(usdt), chunk); // ~23,9% нетто от исходного резерва; резерв вырос — лимит тоже
+        _mint(bob, address(usdt), chunk); // ~8,97% нетто от исходного резерва; резерв вырос — лимит тоже
         _next();
         vm.prank(bob);
         vm.expectPartialRevert(BasketVault.MintWindowCapExceeded.selector);
@@ -186,10 +186,10 @@ contract MintLimitsTest is BaseTest {
         // нетто = gross * 0,997; максимальный gross, проходящий по лимиту блока
         uint256 grossOk = lim * 10_000 / 9_970 / 1e12 - 1;
         _mint(bob, address(usdt), grossOk);
-        // лимит пересчитывается от текущего резерва: после минта остаток ~10% от нетто-взноса
+        // лимит пересчитывается от текущего резерва: после минта остаток ~5% от нетто-взноса
         uint256 net = (grossOk - (grossOk * 30 + 9_999) / 10_000) * 1e12;
         (, uint256 b2) = vault.mintCapacity(BASKET);
-        assertLe(b2, net * 10 / 100 + 1e18);
+        assertLe(b2, net * 5 / 100 + 1e18);
         uint256 over = b2 * 10_000 / 9_970 / 1e12 + 10;
         vm.prank(bob);
         vm.expectPartialRevert(BasketVault.MintBlockCapExceeded.selector);
@@ -201,8 +201,8 @@ contract MintLimitsTest is BaseTest {
         _genesis(15_500);
         (uint256 w, uint256 b) = vault.mintCapacity(BASKET);
         uint256 r = _reserveUsd();
-        assertApproxEqRel(w, r * 125 / 1000, 5e15); // 25% * 0,5
-        assertApproxEqRel(b, r * 5 / 100, 5e15); // 10% * 0,5
+        assertApproxEqRel(w, r * 5 / 100, 5e15); // 10% * 0,5
+        assertApproxEqRel(b, r * 25 / 1000, 5e15); // 5% * 0,5
     }
 
     function test_Taper_ZeroAtFloor_MintBlocked_RedeemAndTopUpWork() public {
@@ -241,7 +241,7 @@ contract MintLimitsTest is BaseTest {
         vault.setWorkingPrice(BASKET, 1.03e18); // покрытие падает ~3%
         assertLt(_covNow(), 16_000);
         (uint256 w,) = vault.mintCapacity(BASKET);
-        assertLt(w, _reserveUsd() * 25 / 100);
+        assertLt(w, _reserveUsd() / 10);
     }
 
     // ------------------------------------------------------------ fuzz
@@ -274,8 +274,8 @@ contract MintLimitsTest is BaseTest {
                 );
             }
         }
-        // за одно окно — не больше 25% максимального резерва в окне
-        assertLe(used, _reserveUsd() * 25 / 100 + 1e18);
+        // за одно окно — не больше 10% максимального резерва в окне
+        assertLe(used, _reserveUsd() / 10 + 1e18);
         assertLe(used, r0 * 2);
     }
 }

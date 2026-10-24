@@ -115,7 +115,7 @@ contract EventsTest is BaseTest {
         vm.expectEmit(true, true, true, true);
         emit BasketVault.SequencerUptimeFeedUpdated(address(0), address(0));
         vm.expectEmit(true, true, true, true);
-        emit BasketVault.MintLimitsUpdated(15_000, 16_000, 2_500, 1_000);
+        emit BasketVault.MintLimitsUpdated(15_000, 16_000, 1_000, 500);
         vm.expectEmit(true, true, true, true);
         emit BasketVault.StableAdded(address(usdt), 6, address(0), 0, false);
         vm.expectEmit(true, true, true, true);

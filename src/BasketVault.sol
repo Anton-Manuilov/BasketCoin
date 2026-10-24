@@ -101,11 +101,11 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
     /// @notice Длина окна часового лимита минта.
     uint256 public constant MINT_WINDOW = 1 hours;
     /// @notice Значения по умолчанию (выставляются в конструкторе): пол 150%, начало сужения 160%,
-    ///         25% резерва в час, 10% резерва за блок (mainnet-дефолт, 24.10).
+    ///         10% резерва в час, 5% резерва за блок.
     uint256 public constant DEFAULT_MINT_FLOOR_BPS = 15_000;
     uint256 public constant DEFAULT_MINT_TAPER_BPS = 16_000;
-    uint256 public constant DEFAULT_MINT_HOUR_CAP_BPS = 2_500;
-    uint256 public constant DEFAULT_MINT_BLOCK_CAP_BPS = 1_000;
+    uint256 public constant DEFAULT_MINT_HOUR_CAP_BPS = 1_000;
+    uint256 public constant DEFAULT_MINT_BLOCK_CAP_BPS = 500;
     /// @notice Безопасные границы параметров (owner не может выйти за них даже через таймлок).
     ///         Пол не ниже порога полного выкупа 140%: минт не может перевести корзину в STANDARD.
     uint256 public constant MINT_FLOOR_MIN_BPS = 14_000;
