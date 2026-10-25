@@ -69,6 +69,22 @@ abstract contract BaseTest is Test {
         return true;
     }
 
+    /// v5.2 (AA-3): тесты v4/v5 двигают рабочую цену большими шагами. Хелпер (только vm.load/vm.store — не
+    /// расходует vm.prank) снимает кулдаун и, если цена в коридоре ±3% индекса, но дальше шага 0,5%, ставит
+    /// рабочую цену сразу в целевую. Шаг и кулдаун проверяются отдельно в test/unit/V52.t.sol.
+    function _wpu(uint256 id, uint256 price) internal returns (uint256) {
+        vm.store(address(vault), keccak256(abi.encode(id, uint256(22))), bytes32(0));
+        uint256 base = uint256(keccak256(abi.encode(id, uint256(3))));
+        uint256 idx = uint256(vm.load(address(vault), bytes32(base + 1)));
+        uint256 wp = uint256(vm.load(address(vault), bytes32(base + 2)));
+        uint256 band = idx * 300 / 10_000;
+        uint256 step = wp * 50 / 10_000;
+        if (price >= idx - band && price <= idx + band && (price + step < wp || price > wp + step)) {
+            vm.store(address(vault), bytes32(base + 2), bytes32(price));
+        }
+        return id;
+    }
+
     function _fund(address stable) internal {
         address[4] memory users = [alice, bob, carol, owner];
         uint256 unit = 10 ** MockStable(stable).decimals();

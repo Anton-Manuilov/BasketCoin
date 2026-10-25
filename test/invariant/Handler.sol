@@ -10,6 +10,22 @@ import {MockStable, MockFeed} from "../mocks/Mocks.sol";
 /// Handler для stateful-fuzz: случайные действия пользователей и владельца.
 /// Все вызовы Vault обёрнуты в try/catch: handler не ревертит, а считает успехи и откаты по каждому действию.
 contract VaultHandler is Test {
+    /// v5.2 (AA-3): тесты v4/v5 двигают рабочую цену большими шагами. Хелпер (только vm.load/vm.store — не
+    /// расходует vm.prank) снимает кулдаун и, если цена в коридоре ±3% индекса, но дальше шага 0,5%, ставит
+    /// рабочую цену сразу в целевую. Шаг и кулдаун проверяются отдельно в test/unit/V52.t.sol.
+    function _wpu(uint256 id, uint256 price) internal returns (uint256) {
+        vm.store(address(vault), keccak256(abi.encode(id, uint256(22))), bytes32(0));
+        uint256 base = uint256(keccak256(abi.encode(id, uint256(3))));
+        uint256 idx = uint256(vm.load(address(vault), bytes32(base + 1)));
+        uint256 wp = uint256(vm.load(address(vault), bytes32(base + 2)));
+        uint256 band = idx * 300 / 10_000;
+        uint256 step = wp * 50 / 10_000;
+        if (price >= idx - band && price <= idx + band && (price + step < wp || price > wp + step)) {
+            vm.store(address(vault), bytes32(base + 2), bytes32(price));
+        }
+        return id;
+    }
+
     BasketVault public vault;
     BasketToken[2] public tokens;
     uint256[2] public basketIds = [uint256(1), uint256(2)];
@@ -243,7 +259,7 @@ contract VaultHandler is Test {
         (, uint256 idx,,,,) = vault.baskets(id);
         bps = bound(bps, 9_650, 10_350); // частично за пределами ±3% → часть откатов ожидаема
         vm.prank(owner);
-        try vault.setWorkingPrice(id, (idx * bps) / 10_000) {
+        try vault.setWorkingPrice(_wpu(id, (idx * bps) / 10_000), (idx * bps) / 10_000) {
             successes["setWorkingPrice"]++;
         } catch (bytes memory err) {
             _recordRevert("setWorkingPrice", err);

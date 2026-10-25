@@ -156,7 +156,7 @@ contract EventsTest is BaseTest {
     // ------------------------------------------------------------ индекс и рабочая цена
     function test_Ev_IndexUpdated_OldNewYearMonthTimestamp() public {
         vm.prank(owner);
-        vault.setWorkingPrice(BASKET, 1.02e18);
+        vault.setWorkingPrice(_wpu(BASKET, 1.02e18), 1.02e18);
         vm.warp(T_OCT28 + 3600);
         vm.recordLogs();
         vm.expectEmit(address(vault));
@@ -190,9 +190,9 @@ contract EventsTest is BaseTest {
         _mint(alice, address(usdt), 1_000e6);
         vm.recordLogs();
         vm.expectEmit(address(vault));
-        emit BasketVault.WorkingPriceUpdated(BASKET, 1e18, 0.98e18, 1e18);
+        emit BasketVault.WorkingPriceUpdated(BASKET, 0.98e18, 0.98e18, 1e18); // v5.2: _wpu ставит цену заранее
         vm.prank(owner);
-        vault.setWorkingPrice(BASKET, 0.98e18);
+        vault.setWorkingPrice(_wpu(BASKET, 0.98e18), 0.98e18);
         _assertVaultSigs(_s(SIG_WP)); // 120%/0,98 ≈ 122% — уровень тот же, лишнего события нет
     }
 
@@ -612,7 +612,7 @@ contract EventsTest is BaseTest {
         _assertVaultSigs(_s(SIG_TOPUP));
         vm.recordLogs();
         vm.prank(owner);
-        vault.setWorkingPrice(BASKET, 0.99e18);
+        vault.setWorkingPrice(_wpu(BASKET, 0.99e18), 0.99e18);
         _assertVaultSigs(_s(SIG_WP));
         vm.recordLogs();
         vm.prank(address(vault));

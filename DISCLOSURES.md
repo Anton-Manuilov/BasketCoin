@@ -15,12 +15,11 @@
 публичные события `WorkingPriceUpdated` / `IndexUpdated`, которые можно отслеживать. Права на эмиссию токена
 (`setTokenRole`) меняются только через таймлок 7 дней; параметры — через таймлок 2 дня.
 
-**Сэндвич вокруг смены рабочей цены (AuditAgent AA-3).** Поскольку `setWorkingPrice` действует сразу, третье лицо,
-заранее узнавшее о повышении цены (например, из очереди подписей Safe), может заминтить до изменения и выкупить после.
-Выгода = рост цены − 0,6% комиссий; размер ограничен лимитами минта. Операционные правила владельца: менять рабочую
-цену шагами не больше 0,5% (меньше суммы комиссий — сэндвич одного шага убыточен), не публиковать заранее параметры
-транзакции, отслеживать события `Minted` перед и после `WorkingPriceUpdated` (мониторинг). Ограничение шага в коде
-не включено, чтобы не менять текущий порядок работы; это решение владельца.
+**Сэндвич вокруг смены рабочей цены (AuditAgent AA-3).** С v5.2 в коде: один вызов `setWorkingPrice` меняет рабочую
+цену не больше чем на 0,5% от текущей и не чаще раза в час на корзину. 0,5% меньше суммы комиссий (0,6%), поэтому
+сэндвич одного шага убыточен; движение на 3% занимает ~6 ч публичных шагов. `setIndex` 28-го этим ограничением не
+затронут (сбрасывает рабочую цену на новый индекс, ±11%; защищён заморозкой минта перед 28-м). Остаточный риск —
+позиция, удерживаемая через несколько шагов; он ограничен лимитами минта и мониторингом.
 
 ### D-2 (M4). Выбор стейбла при выкупе
 Покрытие считается по корзине в целом, а выплата идёт из резерва выбранного стейбла. Если один стейбл (например, USDT)
@@ -67,12 +66,11 @@ hard-coded ±3%/±11% bands, mint limiter (150% coverage floor, hourly and per-b
 (v5.1), and public `WorkingPriceUpdated` / `IndexUpdated` events for monitoring. Token minting rights (`setTokenRole`)
 change only through a 7-day timelock; parameters change through a 2-day timelock.
 
-**Sandwich around a working-price change (AuditAgent AA-3).** `setWorkingPrice` takes effect immediately, so a third
-party who learns about a price increase in advance (e.g. from the Safe signing queue) can mint before the change and
-redeem after it. Profit = price increase − 0.6% fees, bounded by the mint limiter. Owner operating rules: change the
-working price in steps of at most 0.5% (below the round-trip fees, so a single-step sandwich loses money), do not
-disclose transaction parameters in advance, and monitor `Minted` events around `WorkingPriceUpdated`. A step limit is
-not enforced in code so as not to change the current workflow; this is the owner's decision.
+**Sandwich around a working-price change (AuditAgent AA-3).** Since v5.2, enforced in code: one `setWorkingPrice`
+call moves the working price by at most 0.5% of its current value, at most once per hour per basket. 0.5% is below the
+0.6% round-trip fee, so a single-step sandwich loses money; a 3% move takes ~6 hours of public steps. `setIndex` on the
+28th is not affected (it resets the working price to the new index within ±11% and is protected by the pre-index mint
+freeze). Residual risk — a position held across several steps — is bounded by the mint limiter and monitoring.
 
 ### D-2 (M4). Stablecoin choice on redemption
 Coverage is computed per basket, while each payout comes from the reserve of the chosen stablecoin. If one stablecoin

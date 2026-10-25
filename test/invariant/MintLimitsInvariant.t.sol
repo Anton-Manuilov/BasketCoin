@@ -9,6 +9,22 @@ import {MockStable} from "../mocks/Mocks.sol";
 
 /// v5: handler с включённым ограничителем минта. Считает нарушения в ghost-переменных.
 contract MintLimitHandler is Test {
+    /// v5.2 (AA-3): тесты v4/v5 двигают рабочую цену большими шагами. Хелпер (только vm.load/vm.store — не
+    /// расходует vm.prank) снимает кулдаун и, если цена в коридоре ±3% индекса, но дальше шага 0,5%, ставит
+    /// рабочую цену сразу в целевую. Шаг и кулдаун проверяются отдельно в test/unit/V52.t.sol.
+    function _wpu(uint256 id, uint256 price) internal returns (uint256) {
+        vm.store(address(vault), keccak256(abi.encode(id, uint256(22))), bytes32(0));
+        uint256 base = uint256(keccak256(abi.encode(id, uint256(3))));
+        uint256 idx = uint256(vm.load(address(vault), bytes32(base + 1)));
+        uint256 wp = uint256(vm.load(address(vault), bytes32(base + 2)));
+        uint256 band = idx * 300 / 10_000;
+        uint256 step = wp * 50 / 10_000;
+        if (price >= idx - band && price <= idx + band && (price + step < wp || price > wp + step)) {
+            vm.store(address(vault), bytes32(base + 2), bytes32(price));
+        }
+        return id;
+    }
+
     BasketVault public vault;
     BasketToken public coin;
     MockStable public usdt;
@@ -92,7 +108,7 @@ contract MintLimitHandler is Test {
     function moveWorkingPrice(uint256 bps) external {
         bps = bound(bps, 9_700, 10_300);
         vm.prank(owner);
-        try vault.setWorkingPrice(1, 1e18 * bps / 10_000) {} catch {}
+        try vault.setWorkingPrice(_wpu(1, 1e18 * bps / 10_000), 1e18 * bps / 10_000) {} catch {}
     }
 
     /// v5.1: фиксация индекса 28-го (±1%), снимает заморозку месяца

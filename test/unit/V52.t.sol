@@ -399,4 +399,66 @@ contract V52Test is BaseTest {
             90_000
         );
     }
+
+    // ------------------------------------------------------------ AA-3: шаг и кулдаун рабочей цены
+    function test_AA3_StepLimitAndCooldown() public {
+        assertEq(vault.MAX_WORKING_STEP_BPS(), 50);
+        vm.prank(owner);
+        vault.setWorkingPrice(BASKET, 1.005e18); // ровно 0,5%
+        // сразу второй шаг — кулдаун
+        vm.prank(owner);
+        vm.expectRevert(
+            abi.encodeWithSelector(BasketVault.WorkingPriceStep.selector, 1.005e18, 1.01e18, block.timestamp + 1 hours)
+        );
+        vault.setWorkingPrice(BASKET, 1.01e18);
+        vm.warp(block.timestamp + 1 hours);
+        // шаг больше 0,5% от текущей
+        vm.prank(owner);
+        vm.expectPartialRevert(BasketVault.WorkingPriceStep.selector);
+        vault.setWorkingPrice(BASKET, 1.0101e18);
+        vm.prank(owner);
+        vault.setWorkingPrice(BASKET, 1.010025e18); // 1.005 * 1.005
+        // путь к +3%: шагами по 0,5% раз в час (~6 ч)
+        uint256 p = 1.010025e18;
+        uint256 n;
+        while (p < 1.03e18) {
+            vm.warp(block.timestamp + 1 hours);
+            uint256 next = p + p * 50 / 10_000;
+            if (next > 1.03e18) next = 1.03e18;
+            vm.prank(owner);
+            vault.setWorkingPrice(BASKET, next);
+            p = next;
+            ++n;
+        }
+        assertLe(n, 5);
+        assertEq(_wp(BASKET), 1.03e18);
+    }
+
+    /// setIndex 28-го не ограничен шагом/кулдауном и сбрасывает рабочую цену на индекс; кулдаун не мешает.
+    function test_AA3_SetIndexNotBlocked() public {
+        vm.warp(T_OCT28 - 2 hours);
+        vm.prank(owner);
+        vault.setWorkingPrice(BASKET, 0.995e18);
+        vm.warp(T_OCT28 + 1);
+        vm.prank(owner);
+        vault.setIndex(BASKET, 1.11e18); // +11% сразу, через 2 ч после шага
+        assertEq(_wp(BASKET), 1.11e18);
+        // после кулдауна шаг считается от новой рабочей цены (= индекса)
+        vm.prank(owner);
+        vm.expectPartialRevert(BasketVault.WorkingPriceStep.selector);
+        vault.setWorkingPrice(BASKET, 1.11e18 + 1.11e18 * 51 / 10_000);
+    }
+
+    function testFuzz_AA3_StepBound(uint256 bps) public {
+        bps = bound(bps, 9_700, 10_300);
+        uint256 price = 1e18 * bps / 10_000;
+        vm.prank(owner);
+        if (bps < 9_950 || bps > 10_050) {
+            vm.expectPartialRevert(BasketVault.WorkingPriceStep.selector);
+            vault.setWorkingPrice(BASKET, price);
+        } else {
+            vault.setWorkingPrice(BASKET, price);
+            assertEq(_wp(BASKET), price);
+        }
+    }
 }

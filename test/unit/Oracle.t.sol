@@ -224,7 +224,7 @@ contract OracleTest is BaseTest {
 
     function test_SetIndex_StoresTimestampAndResetsWorkingPrice() public {
         vm.prank(owner);
-        vault.setWorkingPrice(BASKET, 1.02e18);
+        vault.setWorkingPrice(_wpu(BASKET, 1.02e18), 1.02e18);
         vm.warp(T_OCT28 + 5);
         vm.prank(owner);
         vault.setIndex(BASKET, 1.11e18); // ровно +11% — граница включительно
@@ -239,13 +239,13 @@ contract OracleTest is BaseTest {
     function test_WorkingPrice_ExactBandAndOneWeiOutside() public {
         vm.startPrank(owner);
         vm.expectEmit(true, false, false, true, address(vault));
-        emit BasketVault.WorkingPriceUpdated(BASKET, 1e18, 1.03e18, 1e18);
-        vault.setWorkingPrice(BASKET, 1.03e18);
-        vault.setWorkingPrice(BASKET, 0.97e18);
+        emit BasketVault.WorkingPriceUpdated(BASKET, 1.03e18, 1.03e18, 1e18); // v5.2: _wpu ставит цену заранее (шаг > 0,5%)
+        vault.setWorkingPrice(_wpu(BASKET, 1.03e18), 1.03e18);
+        vault.setWorkingPrice(_wpu(BASKET, 0.97e18), 0.97e18);
         vm.expectRevert(abi.encodeWithSelector(BasketVault.PriceOutOfBand.selector, 1.03e18 + 1, 1e18));
-        vault.setWorkingPrice(BASKET, 1.03e18 + 1);
+        vault.setWorkingPrice(_wpu(BASKET, 1.03e18 + 1), 1.03e18 + 1);
         vm.expectRevert(abi.encodeWithSelector(BasketVault.PriceOutOfBand.selector, 0.97e18 - 1, 1e18));
-        vault.setWorkingPrice(BASKET, 0.97e18 - 1);
+        vault.setWorkingPrice(_wpu(BASKET, 0.97e18 - 1), 0.97e18 - 1);
         vm.stopPrank();
     }
 
@@ -255,20 +255,20 @@ contract OracleTest is BaseTest {
         vm.startPrank(owner);
         vault.setIndex(BASKET, idx);
         uint256 band = (idx * 300) / 10_000; // округление вниз → полоса не шире 3%
-        vault.setWorkingPrice(BASKET, idx + band);
-        vault.setWorkingPrice(BASKET, idx - band);
+        vault.setWorkingPrice(_wpu(BASKET, idx + band), idx + band);
+        vault.setWorkingPrice(_wpu(BASKET, idx - band), idx - band);
         vm.expectRevert(abi.encodeWithSelector(BasketVault.PriceOutOfBand.selector, idx + band + 1, idx));
-        vault.setWorkingPrice(BASKET, idx + band + 1);
+        vault.setWorkingPrice(_wpu(BASKET, idx + band + 1), idx + band + 1);
         // старая полоса (от 1e18) больше не действует
         vm.expectRevert(abi.encodeWithSelector(BasketVault.PriceOutOfBand.selector, 1e18, idx));
-        vault.setWorkingPrice(BASKET, 1e18);
+        vault.setWorkingPrice(_wpu(BASKET, 1e18), 1e18);
         vm.stopPrank();
     }
 
     function test_WorkingPrice_UnknownBasket() public {
         vm.prank(owner);
         vm.expectRevert(abi.encodeWithSelector(BasketVault.UnknownBasket.selector, 3));
-        vault.setWorkingPrice(3, 1e18);
+        vault.setWorkingPrice(_wpu(3, 1e18), 1e18);
     }
 }
 

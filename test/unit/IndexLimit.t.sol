@@ -192,12 +192,12 @@ contract IndexLimitTest is BaseTest {
         _set(BASKET, 1.11e18);
         assertEq(_wp(BASKET), 1.11e18);
         vm.startPrank(owner);
-        vault.setWorkingPrice(BASKET, 1.1433e18); // +3%
-        vault.setWorkingPrice(BASKET, 1.0767e18); // −3%
+        vault.setWorkingPrice(_wpu(BASKET, 1.1433e18), 1.1433e18); // +3%
+        vault.setWorkingPrice(_wpu(BASKET, 1.0767e18), 1.0767e18); // −3%
         vm.expectRevert(abi.encodeWithSelector(BasketVault.PriceOutOfBand.selector, 1.1433e18 + 1, 1.11e18));
-        vault.setWorkingPrice(BASKET, 1.1433e18 + 1);
+        vault.setWorkingPrice(_wpu(BASKET, 1.1433e18 + 1), 1.1433e18 + 1);
         vm.expectRevert(abi.encodeWithSelector(BasketVault.PriceOutOfBand.selector, 1.03e18, 1.11e18));
-        vault.setWorkingPrice(BASKET, 1.03e18); // старая полоса не действует
+        vault.setWorkingPrice(_wpu(BASKET, 1.03e18), 1.03e18); // старая полоса не действует
         vm.stopPrank();
         // лимит индекса считается от индекса, а не от рабочей цены
         vm.warp(T_NOV28);

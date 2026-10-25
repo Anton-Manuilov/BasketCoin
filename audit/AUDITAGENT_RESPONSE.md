@@ -22,7 +22,7 @@
 |---|---|---|---|
 | AA-1 | High | Unexpiring manual price lets depegged feedless stables drain healthy reserves | Fixed (Chainlink feeds + instant per-stable freeze) |
 | AA-2 | Medium | Pre-index mint freeze leaves a gap when `mintFreezeSec` > 1 day | Fixed |
-| AA-3 | Medium | Immediate `setWorkingPrice` allows mint–redeem sandwiches | Acknowledged (operational controls + disclosure) |
+| AA-3 | Medium | Immediate `setWorkingPrice` allows mint–redeem sandwiches | Fixed (≤0.5% step, 1 h cooldown) |
 | AA-4 | Medium | Linear previous-window decay permits minting above the hourly cap | Fixed |
 | AA-5 | Medium | Sequencer uptime feed only format-checked; a bad feed blocks mint/redeem | Fixed |
 | AA-6 | Low | Previews / `isDepegged` can contradict live eligibility | Fixed |
@@ -46,12 +46,15 @@ Tests: `test/unit/V52.t.sol` `test_AA1_*`.
 sampling only the point `now + mintFreezeSec`). The freeze is contiguous for any allowed value; the maximum stays
 2 days. Tests: hour-by-hour sweep with a 2-day freeze and a fuzz test over all values (`test_AA2_*`, `testFuzz_AA2_*`).
 
-### AA-3 (Medium) — working-price sandwich — **Acknowledged**
-Same issue as our earlier internal finding M2. The owner is a Safe 2-of-3; working-price changes are monitored.
-Operational rule: change the working price in steps of at most 0.5% (below the 0.6% round-trip fee, so a single-step
-sandwich is unprofitable) and do not disclose transaction parameters in advance. Profit per sandwich is also bounded by
-the mint limiter (150% coverage floor, hourly and per-block caps). A code-level step limit was considered and left as an
-owner decision because it changes the operating workflow. Disclosed in `DISCLOSURES.md` D-1.
+### AA-3 (Medium) — working-price sandwich — **Fixed**
+`setWorkingPrice` is now limited in code: each call may move the working price by at most **0.5%** of the current
+working price (`MAX_WORKING_STEP_BPS = 50`), and at most once per **1 hour** per basket (`WORKING_PRICE_COOLDOWN`).
+0.5% is below the 0.6% round-trip fee (0.3% mint + 0.3% redeem), so a mint-before / redeem-after sandwich around a
+single change loses money. A full move across the ±3% band now takes about 6 hours of public, monitorable steps.
+The ±3% band around the index still applies. `setIndex` on the 28th is **not** limited by the step or cooldown: it
+resets the working price to the new index (±11% bound), and is protected separately by the pre-index mint freeze
+(AA-2). Residual risk (holding a position across several steps) is bounded by the mint limiter and disclosed in
+`DISCLOSURES.md` D-1. Tests: `test_AA3_*`, `testFuzz_AA3_*`.
 
 ### AA-4 (Medium) — hourly cap bypass — **Fixed**
 The decaying previous-window counter was replaced by seven 10-minute buckets. Every mint younger than one hour is
@@ -78,5 +81,5 @@ permissionless `claimFees(stable)`. A blacklisted or reverting fee recipient can
 Invariant: vault balance = reserves + accrued fees. Tests: `test_AA7_*`, invariant suite.
 
 ## Verification
-- Foundry: 277/277 tests pass (including 18 invariants and new `test/unit/V52.t.sol`).
-- Slither: 0 High, 0 Medium (20 Low, 2 Informational; see `docs/AUDIT_PACKAGE/appendix/slither-v5.2.txt`).
+- Foundry: 280/280 tests pass (including 18 invariants and new `test/unit/V52.t.sol`).
+- Slither: 0 High, 0 Medium (21 Low, 2 Informational; see `docs/AUDIT_PACKAGE/appendix/slither-v5.2.txt`).

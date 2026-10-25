@@ -227,10 +227,10 @@ contract BoundariesTest is BaseTest {
         _topUpTo(14_100, address(usdc));
         _expectTier(BASKET, FULL, STD);
         vm.prank(owner);
-        vault.setWorkingPrice(BASKET, 1.01e18);
+        vault.setWorkingPrice(_wpu(BASKET, 1.01e18), 1.01e18);
         _expectTier(BASKET, STD, FULL);
         vm.prank(owner);
-        vault.setWorkingPrice(BASKET, 1e18);
+        vault.setWorkingPrice(_wpu(BASKET, 1e18), 1e18);
     }
 
     function test_Source_WorkingPrice_StandardSuspendedBothWays() public {
@@ -241,10 +241,10 @@ contract BoundariesTest is BaseTest {
         _assertTier(STD);
         _expectTier(BASKET, STD, SUS);
         vm.prank(owner);
-        vault.setWorkingPrice(BASKET, 1.0609e18); // +3% → 113.1%
+        vault.setWorkingPrice(_wpu(BASKET, 1.0609e18), 1.0609e18); // +3% → 113.1%
         _expectTier(BASKET, SUS, STD);
         vm.prank(owner);
-        vault.setWorkingPrice(BASKET, 1.03e18);
+        vault.setWorkingPrice(_wpu(BASKET, 1.03e18), 1.03e18);
     }
 
     // ------------------------------------------------ источник: ручная цена стейбла

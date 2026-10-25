@@ -240,7 +240,7 @@ contract MintLimitsTest is BaseTest {
     function test_SetIndexDoesNotTouchLimits_ButTaperReacts() public {
         _genesis(16_300);
         vm.prank(owner);
-        vault.setWorkingPrice(BASKET, 1.03e18); // покрытие падает ~3%
+        vault.setWorkingPrice(_wpu(BASKET, 1.03e18), 1.03e18); // покрытие падает ~3%
         assertLt(_covNow(), 16_000);
         (uint256 w,) = vault.mintCapacity(BASKET);
         assertLt(w, _reserveUsd() / 10);

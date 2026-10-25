@@ -161,7 +161,7 @@ contract MintRedeemTest is BaseTest {
         amount = bound(amount, 50e6, 10_000_000e6);
         pBps = bound(pBps, 9_700, 10_300);
         vm.prank(owner);
-        vault.setWorkingPrice(BASKET, pBps * 1e14);
+        vault.setWorkingPrice(_wpu(BASKET, pBps * 1e14), pBps * 1e14);
         uint256 t = _mint(alice, address(usdt), amount);
         uint256 net = amount - _ceilFee(amount);
         // стоимость выпущенного * 1,2 <= netUsd
@@ -332,7 +332,7 @@ contract MintRedeemTest is BaseTest {
         vm.prank(address(vault));
         vault.setManualPrice(address(usdt), 0.99e18);
         vm.startPrank(owner);
-        vault.setWorkingPrice(BASKET, 1.01e18);
+        vault.setWorkingPrice(_wpu(BASKET, 1.01e18), 1.01e18);
         vault.setMinMintUsd(100e18);
         vault.unpause();
         vm.expectRevert(Pausable.ExpectedPause.selector);

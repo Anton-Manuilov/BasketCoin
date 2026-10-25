@@ -20,6 +20,22 @@ contract DateHarness {
 }
 
 contract BasketVaultTest is Test {
+    /// v5.2 (AA-3): тесты v4/v5 двигают рабочую цену большими шагами. Хелпер (только vm.load/vm.store — не
+    /// расходует vm.prank) снимает кулдаун и, если цена в коридоре ±3% индекса, но дальше шага 0,5%, ставит
+    /// рабочую цену сразу в целевую. Шаг и кулдаун проверяются отдельно в test/unit/V52.t.sol.
+    function _wpu(uint256 id, uint256 price) internal returns (uint256) {
+        vm.store(address(vault), keccak256(abi.encode(id, uint256(22))), bytes32(0));
+        uint256 base = uint256(keccak256(abi.encode(id, uint256(3))));
+        uint256 idx = uint256(vm.load(address(vault), bytes32(base + 1)));
+        uint256 wp = uint256(vm.load(address(vault), bytes32(base + 2)));
+        uint256 band = idx * 300 / 10_000;
+        uint256 step = wp * 50 / 10_000;
+        if (price >= idx - band && price <= idx + band && (price + step < wp || price > wp + step)) {
+            vm.store(address(vault), bytes32(base + 2), bytes32(price));
+        }
+        return id;
+    }
+
     // 2026-10-19 00:00 UTC, 2026-10-28 00:00 UTC, 2026-10-29, 2026-11-28
     uint256 constant T_OCT19 = 1792368000;
     uint256 constant T_OCT28 = 1793145600;
@@ -93,7 +109,7 @@ contract BasketVaultTest is Test {
 
     function test_Mint_AtWorkingPrice() public {
         vm.prank(owner);
-        vault.setWorkingPrice(BASKET, 1.03e18);
+        vault.setWorkingPrice(_wpu(BASKET, 1.03e18), 1.03e18);
         uint256 out = _mint(alice, address(usdc), 1_000e6);
         assertEq(out, (uint256(997e18) * 1e18 * 10_000) / (uint256(1.03e18) * 12_000));
     }
@@ -410,12 +426,12 @@ contract BasketVaultTest is Test {
 
     function test_WorkingPrice_Within3Percent() public {
         vm.startPrank(owner);
-        vault.setWorkingPrice(BASKET, 1.03e18);
-        vault.setWorkingPrice(BASKET, 0.97e18);
+        vault.setWorkingPrice(_wpu(BASKET, 1.03e18), 1.03e18);
+        vault.setWorkingPrice(_wpu(BASKET, 0.97e18), 0.97e18);
         vm.expectRevert(abi.encodeWithSelector(BasketVault.PriceOutOfBand.selector, 1.0301e18, 1e18));
-        vault.setWorkingPrice(BASKET, 1.0301e18);
+        vault.setWorkingPrice(_wpu(BASKET, 1.0301e18), 1.0301e18);
         vm.expectRevert(abi.encodeWithSelector(BasketVault.PriceOutOfBand.selector, 0.9699e18, 1e18));
-        vault.setWorkingPrice(BASKET, 0.9699e18);
+        vault.setWorkingPrice(_wpu(BASKET, 0.9699e18), 0.9699e18);
         vm.stopPrank();
 
         // после нового индекса полоса ±3% считается от нового индекса, рабочая цена сброшена
@@ -424,9 +440,9 @@ contract BasketVaultTest is Test {
         vault.setIndex(BASKET, 1.1e18);
         (,, uint256 wp,,,) = vault.baskets(BASKET);
         assertEq(wp, 1.1e18);
-        vault.setWorkingPrice(BASKET, 1.133e18); // +3% от нового индекса
+        vault.setWorkingPrice(_wpu(BASKET, 1.133e18), 1.133e18); // +3% от нового индекса
         vm.expectRevert();
-        vault.setWorkingPrice(BASKET, 1.03e18);
+        vault.setWorkingPrice(_wpu(BASKET, 1.03e18), 1.03e18);
         vm.stopPrank();
     }
 
@@ -455,7 +471,7 @@ contract BasketVaultTest is Test {
         vm.expectRevert(err);
         vault.setIndex(BASKET, 1e18);
         vm.expectRevert(err);
-        vault.setWorkingPrice(BASKET, 1e18);
+        vault.setWorkingPrice(_wpu(BASKET, 1e18), 1e18);
         vm.expectRevert(BasketVault.OnlyTimelock.selector);
         vault.setManualPrice(address(usdt), 1e18);
         vm.expectRevert(BasketVault.OnlyTimelock.selector);
@@ -538,7 +554,7 @@ contract BasketVaultTest is Test {
         amount = bound(amount, 50e6, 1_000_000e6);
         priceBps = bound(priceBps, 9_700, 10_300);
         vm.prank(owner);
-        vault.setWorkingPrice(BASKET, priceBps * 1e14);
+        vault.setWorkingPrice(_wpu(BASKET, priceBps * 1e14), priceBps * 1e14);
         uint256 before = usdt.balanceOf(alice);
         uint256 tokens = _mint(alice, address(usdt), amount);
         assertGe(vault.collateralRatioBps(BASKET), 11_999);

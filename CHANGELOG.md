@@ -7,7 +7,8 @@
   `feedStaleness_`; адреса в `config/chainlink-feeds.md`). Резерв: `freezeStableMint(stable)`: owner или guardian мгновенно запрещают минт в стейбле (депег стейбла без
   фида). Снятие `unfreezeStableMint` — только таймлок 2 дня. Выкуп не блокируется.
 - **AA-2** — окно заморозки перед 28-м считается по интервалу `[now, now + mintFreezeSec]`: без разрыва при любой длительности до 2 дней.
-- **AA-3** — `setWorkingPrice` без изменений в коде; правила (шаг ≤ 0,5%, мониторинг) в `DISCLOSURES.md` D-1.
+- **AA-3** — `setWorkingPrice`: шаг ≤ 0,5% от текущей рабочей цены, не чаще раза в час (`MAX_WORKING_STEP_BPS`,
+  `WORKING_PRICE_COOLDOWN`, ошибка `WorkingPriceStep`). `setIndex` 28-го не ограничен и сбрасывает рабочую цену на индекс.
 - **AA-4** — часовой лимит минта по 7 корзинам по 10 минут: любой минт моложе часа учитывается полностью.
   `mintWindows` больше не public (новая структура).
 - **AA-5** — проверка ответа фида секвенсора в конструкторе и `setSequencerUptimeFeed`; `disableBrokenSequencerFeed()`
@@ -15,7 +16,7 @@
 - **AA-6** — `previewMint` ревертит теми же ошибками, что и `mint`; `quoteRedeem.executableNow` учитывает валидность фида
   и секвенсор; `isDepegged` и события депега считают недоступный фид непригодным.
 - **AA-7** — комиссии копятся в `accruedFees[stable]`, забираются `claimFees(stable)` (кто угодно, получатель — казна).
-- Тесты: 277/277 (новый `test/unit/V52.t.sol`, 18 инвариантов). Slither: 0 High / 0 Medium.
+- Тесты: 280/280 (новый `test/unit/V52.t.sol`, 18 инвариантов). Slither: 0 High / 0 Medium.
 
 ## v5.1 — исправления по ИИ-ревью (ветка `feat/v5.1-fixes` от `e762460`, на ревью у Антона, не опубликовано)
 

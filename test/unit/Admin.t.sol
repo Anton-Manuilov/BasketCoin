@@ -259,7 +259,7 @@ contract AdminTest is BaseTest {
         vm.expectRevert(err);
         vault.setIndex(BASKET, 1e18);
         vm.expectRevert(err);
-        vault.setWorkingPrice(BASKET, 1e18);
+        vault.setWorkingPrice(_wpu(BASKET, 1e18), 1e18);
         vm.expectRevert(err);
         vault.proposeStable(address(dai), IAggregatorV3(address(0)), 0);
         vm.expectRevert(err);

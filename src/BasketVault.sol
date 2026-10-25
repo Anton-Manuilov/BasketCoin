@@ -126,6 +126,10 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
     ///         поэтому любой минт моложе часа всегда засчитан (память лимита 60–70 мин, без «затухания»).
     uint256 public constant MINT_BUCKET = 10 minutes;
     uint256 public constant MINT_BUCKETS = 7;
+    /// @notice v5.2 (AA-3): шаг setWorkingPrice — не больше 0,5% от текущей рабочей цены (меньше двух комиссий 0,6%:
+    ///         сэндвич одного шага убыточен) и не чаще раза в WORKING_PRICE_COOLDOWN. setIndex (28-го) не ограничен.
+    uint256 public constant MAX_WORKING_STEP_BPS = 50;
+    uint256 public constant WORKING_PRICE_COOLDOWN = 1 hours;
 
     /// @notice Уровень выкупа корзины.
     enum RedeemTier {
@@ -252,6 +256,8 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
     mapping(address stable => bool) public stableMintFrozen;
     /// @notice v5.2 (AA-7): накопленные комиссии протокола по стейблам (pull: claimFees переводит казне).
     mapping(address stable => uint256) public accruedFees;
+    /// @notice v5.2 (AA-3): время последнего setWorkingPrice по корзине (setIndex его не меняет).
+    mapping(uint256 basketId => uint256) public lastWorkingPriceUpdate;
 
     // ---------------------------------------------------------------------
     // События
@@ -458,6 +464,7 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
     // v5.2
     error StableMintIsFrozen(address stable);
     error SequencerFeedHealthy();
+    error WorkingPriceStep(uint256 oldPrice, uint256 newPrice, uint256 allowedAt);
 
     /// @dev Функция вызывается только через таймлок: scheduleOp → (задержка) → executeOp.
     modifier onlyTimelock() {
@@ -597,6 +604,14 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
         uint256 band = (b.index * MAX_DRIFT_BPS) / BPS;
         if (price < b.index - band || price > b.index + band) revert PriceOutOfBand(price, b.index);
         uint256 oldPrice = b.workingPrice;
+        // v5.2 (AA-3): шаг <= 0,5% от текущей рабочей цены, не чаще раза в час
+        uint256 step = (oldPrice * MAX_WORKING_STEP_BPS) / BPS;
+        uint256 allowedAt = lastWorkingPriceUpdate[basketId] + WORKING_PRICE_COOLDOWN;
+        // forge-lint: disable-next-line(block-timestamp)
+        if (price + step < oldPrice || price > oldPrice + step || block.timestamp < allowedAt) {
+            revert WorkingPriceStep(oldPrice, price, allowedAt);
+        }
+        lastWorkingPriceUpdate[basketId] = block.timestamp;
         b.workingPrice = price;
         emit WorkingPriceUpdated(basketId, oldPrice, price, b.index);
         _syncTier(basketId);

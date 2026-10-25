@@ -11,6 +11,22 @@ import {DateLib} from "../src/libraries/DateLib.sol";
 
 /// Тесты трёхуровневого выкупа по покрытию: FULL (>=140%), STANDARD (115%..140%), SUSPENDED (<115%).
 contract RedeemTiersTest is Test {
+    /// v5.2 (AA-3): тесты v4/v5 двигают рабочую цену большими шагами. Хелпер (только vm.load/vm.store — не
+    /// расходует vm.prank) снимает кулдаун и, если цена в коридоре ±3% индекса, но дальше шага 0,5%, ставит
+    /// рабочую цену сразу в целевую. Шаг и кулдаун проверяются отдельно в test/unit/V52.t.sol.
+    function _wpu(uint256 id, uint256 price) internal returns (uint256) {
+        vm.store(address(vault), keccak256(abi.encode(id, uint256(22))), bytes32(0));
+        uint256 base = uint256(keccak256(abi.encode(id, uint256(3))));
+        uint256 idx = uint256(vm.load(address(vault), bytes32(base + 1)));
+        uint256 wp = uint256(vm.load(address(vault), bytes32(base + 2)));
+        uint256 band = idx * 300 / 10_000;
+        uint256 step = wp * 50 / 10_000;
+        if (price >= idx - band && price <= idx + band && (price + step < wp || price > wp + step)) {
+            vm.store(address(vault), bytes32(base + 2), bytes32(price));
+        }
+        return id;
+    }
+
     uint256 constant T_OCT19 = 1792368000; // 2026-10-19 00:00 UTC
     uint256 constant T_OCT28 = 1793145600; // 2026-10-28 00:00 UTC
     uint256 constant T_NOV28 = 1795824000; // 2026-11-28 00:00 UTC
@@ -208,7 +224,7 @@ contract RedeemTiersTest is Test {
 
         _expectTier(BasketVault.RedeemTier.Suspended, BasketVault.RedeemTier.Standard);
         vm.prank(owner);
-        vault.setWorkingPrice(BASKET, 1.0185e18); // -3% от индекса → ≈117.8%
+        vault.setWorkingPrice(_wpu(BASKET, 1.0185e18), 1.0185e18); // -3% от индекса → ≈117.8%
         vm.prank(alice);
         vault.redeem(BASKET, address(usdt), tokens, 0);
     }
@@ -221,11 +237,11 @@ contract RedeemTiersTest is Test {
 
         _expectTier(BasketVault.RedeemTier.Full, BasketVault.RedeemTier.Standard);
         vm.prank(owner);
-        vault.setWorkingPrice(BASKET, 1.03e18); // 142% / 1.03 ≈ 137.9%
+        vault.setWorkingPrice(_wpu(BASKET, 1.03e18), 1.03e18); // 142% / 1.03 ≈ 137.9%
 
         _expectTier(BasketVault.RedeemTier.Standard, BasketVault.RedeemTier.Full);
         vm.prank(owner);
-        vault.setWorkingPrice(BASKET, 0.98e18); // ≈144.9%
+        vault.setWorkingPrice(_wpu(BASKET, 0.98e18), 0.98e18); // ≈144.9%
     }
 
     function test_Transition_ByIndexDrop() public {
@@ -360,7 +376,7 @@ contract RedeemTiersTest is Test {
         _topUpTo(14_100);
         uint256 quoted = vault.quoteRedeem(BASKET, address(usdt), tokens).payoutNow; // с буфером
         vm.prank(owner);
-        vault.setWorkingPrice(BASKET, 1.02e18); // уровень падает до STANDARD
+        vault.setWorkingPrice(_wpu(BASKET, 1.02e18), 1.02e18); // уровень падает до STANDARD
         uint256 actual = vault.quoteRedeem(BASKET, address(usdt), tokens).payoutNow;
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(BasketVault.Slippage.selector, actual, quoted));
@@ -436,7 +452,9 @@ contract RedeemTiersTest is Test {
         }
         _setIndexStepwise(indexBps * 1e14); // v0.4: 0,7…1,1 — за несколько месяцев по ≤ 11%
         vm.startPrank(owner);
-        vault.setWorkingPrice(BASKET, (indexBps * 1e14 * driftBps) / 10_000);
+        vault.setWorkingPrice(
+            _wpu(BASKET, (indexBps * 1e14 * driftBps) / 10_000), (indexBps * 1e14 * driftBps) / 10_000
+        );
         vm.stopPrank();
 
         uint256 amount = (ta * fracBps) / 10_000;
