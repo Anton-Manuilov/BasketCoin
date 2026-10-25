@@ -220,11 +220,44 @@ contract V52Test is BaseTest {
     function test_AA5_ConstructorValidatesFeed() public {
         SeqFeed f = new SeqFeed();
         vm.expectRevert(BasketVault.SequencerFeedInvalid.selector);
-        new BasketVault(owner, treasury, address(usdt), address(usdc), 50e18, address(0), address(f));
+        new BasketVault(
+            owner,
+            treasury,
+            address(usdt),
+            address(usdc),
+            50e18,
+            address(0),
+            address(f),
+            IAggregatorV3(address(0)),
+            IAggregatorV3(address(0)),
+            0
+        );
         vm.expectRevert(BasketVault.SequencerFeedInvalid.selector);
-        new BasketVault(owner, treasury, address(usdt), address(usdc), 50e18, address(0), makeAddr("eoa"));
+        new BasketVault(
+            owner,
+            treasury,
+            address(usdt),
+            address(usdc),
+            50e18,
+            address(0),
+            makeAddr("eoa"),
+            IAggregatorV3(address(0)),
+            IAggregatorV3(address(0)),
+            0
+        );
         f.set(0, block.timestamp - 2 hours);
-        new BasketVault(owner, treasury, address(usdt), address(usdc), 50e18, address(0), address(f));
+        new BasketVault(
+            owner,
+            treasury,
+            address(usdt),
+            address(usdc),
+            50e18,
+            address(0),
+            address(f),
+            IAggregatorV3(address(0)),
+            IAggregatorV3(address(0)),
+            0
+        );
     }
 
     function test_AA5_GuardianDisablesOnlyBrokenFeed() public {
@@ -330,5 +363,40 @@ contract V52Test is BaseTest {
         assertEq(usdt.balanceOf(address(vault)), vault.reserves(BASKET, address(usdt)));
         vm.expectRevert(BasketVault.ZeroAmount.selector);
         vault.claimFees(address(usdt));
+    }
+
+    // ------------------------------------------------------------ AA-1: Chainlink-фиды USDT/USDC в конструкторе
+    function test_AA1_ConstructorFeeds() public {
+        MockFeed ft = new MockFeed(8, 0.9987e8);
+        MockFeed fc = new MockFeed(8, 0.9998e8);
+        BasketVault v = new BasketVault(
+            owner, treasury, address(usdt), address(usdc), 50e18, address(0), address(0), ft, fc, 90_000
+        );
+        (,, IAggregatorV3 f1,, uint256 st) = v.stables(address(usdt));
+        assertEq(address(f1), address(ft));
+        assertEq(st, 90_000);
+        assertEq(v.stablePrice(address(usdt)), 0.9987e18);
+        ft.set(0.9e8, block.timestamp); // депег по фиду → непригоден автоматически
+        assertTrue(v.isDepegged(address(usdt)));
+        vm.warp(block.timestamp + 90_001); // фид устарел
+        assertTrue(v.isDepegged(address(usdc)));
+    }
+
+    function test_AA1_ConstructorRejectsBadFeed() public {
+        MockFeed bad = new MockFeed(8, 1e8);
+        bad.setBroken(true);
+        vm.expectRevert(abi.encodeWithSelector(BasketVault.FeedUnavailable.selector, address(usdc)));
+        new BasketVault(
+            owner,
+            treasury,
+            address(usdt),
+            address(usdc),
+            50e18,
+            address(0),
+            address(0),
+            IAggregatorV3(address(0)),
+            bad,
+            90_000
+        );
     }
 }

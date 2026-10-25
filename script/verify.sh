@@ -31,6 +31,11 @@ DEPLOYER=$(j .deployer); FEE=$(j .feeRecipient); MINMINT=$(j .minMintUsd)
 if [ "$(j 'has("guardian")')" = "true" ]; then
   VAULT_ARGS=$(cast abi-encode "constructor(address,address,address,address,uint256,address,address)" \
     "$DEPLOYER" "$FEE" "$USDT" "$USDC" "$MINMINT" "$(j .guardian)" "$(j .sequencerUptimeFeed)")
+  # v5.2+: + фиды USDT/USDC и их допустимая давность
+  if [ "$(j 'has("usdtFeed")')" = "true" ]; then
+    VAULT_ARGS=$(cast abi-encode "constructor(address,address,address,address,uint256,address,address,address,address,uint256)" \
+      "$DEPLOYER" "$FEE" "$USDT" "$USDC" "$MINMINT" "$(j .guardian)" "$(j .sequencerUptimeFeed)" "$(j .usdtFeed)" "$(j .usdcFeed)" "$(j .feedStaleness)")
+  fi
 else
   VAULT_ARGS=$(cast abi-encode "constructor(address,address,address,address,uint256)" "$DEPLOYER" "$FEE" "$USDT" "$USDC" "$MINMINT")
 fi

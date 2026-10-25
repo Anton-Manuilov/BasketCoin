@@ -31,7 +31,18 @@ contract RedeemTiersTest is Test {
         vm.warp(T_OCT19);
         usdt = new MockStable("Tether USD", "USDT", 6);
         usdc = new MockStable("USD Coin", "USDC", 6);
-        vault = new BasketVault(owner, treasury, address(usdt), address(usdc), 50e18, address(0), address(0));
+        vault = new BasketVault(
+            owner,
+            treasury,
+            address(usdt),
+            address(usdc),
+            50e18,
+            address(0),
+            address(0),
+            IAggregatorV3(address(0)),
+            IAggregatorV3(address(0)),
+            0
+        );
         // v5: регрессия v4 — ограничитель минта выключен через vm.store (в контракте это невозможно:
         // setMintLimits держит безопасные границы). Лимиты v5 покрыты отдельно в test/unit/MintLimits.t.sol.
         V4Mode.disableMintLimits(address(vault));

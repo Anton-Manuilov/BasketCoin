@@ -122,7 +122,18 @@ contract EventsTest is BaseTest {
         emit BasketVault.StableAdded(address(usdt), 6, address(0), 0, false);
         vm.expectEmit(true, true, true, true);
         emit BasketVault.StableAdded(address(usdc), 6, address(0), 0, false);
-        BasketVault v = new BasketVault(owner, treasury, address(usdt), address(usdc), 75e18, address(0), address(0));
+        BasketVault v = new BasketVault(
+            owner,
+            treasury,
+            address(usdt),
+            address(usdc),
+            75e18,
+            address(0),
+            address(0),
+            IAggregatorV3(address(0)),
+            IAggregatorV3(address(0)),
+            0
+        );
         Vm.Log[] memory logs = vm.getRecordedLogs();
         uint256 n;
         for (uint256 i; i < logs.length; ++i) {

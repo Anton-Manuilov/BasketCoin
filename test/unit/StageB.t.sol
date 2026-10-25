@@ -99,7 +99,18 @@ contract StageBTest is BaseTest {
     }
 
     function test_Guardian_ViaConstructor() public {
-        BasketVault v = new BasketVault(owner, treasury, address(usdt), address(usdc), 50e18, guardian, address(0));
+        BasketVault v = new BasketVault(
+            owner,
+            treasury,
+            address(usdt),
+            address(usdc),
+            50e18,
+            guardian,
+            address(0),
+            IAggregatorV3(address(0)),
+            IAggregatorV3(address(0)),
+            0
+        );
         assertEq(v.guardian(), guardian);
         vm.prank(guardian);
         v.pause();

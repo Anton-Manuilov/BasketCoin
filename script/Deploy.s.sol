@@ -3,6 +3,7 @@ pragma solidity ^0.8.24;
 
 import {Script, console2} from "forge-std/Script.sol";
 import {BasketVault} from "../src/BasketVault.sol";
+import {IAggregatorV3} from "../src/interfaces/IAggregatorV3.sol";
 import {BasketToken} from "../src/BasketToken.sol";
 import {TestUSDT, TestUSDC} from "../src/testnet/TestStablecoins.sol";
 
@@ -19,6 +20,8 @@ import {TestUSDT, TestUSDC} from "../src/testnet/TestStablecoins.sol";
 ///   MIN_MINT_USD      — минимальный минт, USD 18 знаков (по умолчанию 50e18 = $50)
 ///   INITIAL_INDEX     — стартовый индекс корзины, 18 знаков (по умолчанию 1e18 = $1,00)
 ///   BASKET_ID         — id корзины (по умолчанию 1)
+///   USDT_FEED / USDC_FEED — Chainlink USDT/USD и USDC/USD (по умолчанию 0 = ручная цена $1); адреса — config/chainlink-feeds.md
+///   FEED_STALENESS    — допустимый возраст ответа фидов, с (по умолчанию 90000 = 25 ч при heartbeat 24 ч)
 ///   USDT_ADDRESS / USDC_ADDRESS — переиспользовать существующие тестовые стейблы (по умолчанию — развернуть новые)
 ///   DEPLOYMENTS_FILE  — куда записать адреса (по умолчанию deployments/base-sepolia.json при chainId 84532,
 ///                       иначе deployments/<chainId>.json)
@@ -93,8 +96,18 @@ contract Deploy is Script {
         if (d.usdt == address(0)) d.usdt = address(new TestUSDT());
         if (d.usdc == address(0)) d.usdc = address(new TestUSDC());
         // Vault и токен создаются с деплоером в роли владельца/админа, чтобы настроить их в той же сессии.
-        BasketVault vault =
-            new BasketVault(deployer, c.feeRecipient, d.usdt, d.usdc, c.minMintUsd, c.guardian, c.sequencerUptimeFeed);
+        BasketVault vault = new BasketVault(
+            deployer,
+            c.feeRecipient,
+            d.usdt,
+            d.usdc,
+            c.minMintUsd,
+            c.guardian,
+            c.sequencerUptimeFeed,
+            IAggregatorV3(vm.envOr("USDT_FEED", address(0))),
+            IAggregatorV3(vm.envOr("USDC_FEED", address(0))),
+            vm.envOr("FEED_STALENESS", uint256(90_000))
+        );
         BasketToken token = new BasketToken("BasketCoin", "BKT", deployer);
         token.grantRole(token.MINTER_ROLE(), address(vault));
         vault.addBasket(c.basketId, token, c.initialIndex);
@@ -142,6 +155,9 @@ contract Deploy is Script {
         vm.serializeAddress(k, "tokenAdmin", d.vault);
         vm.serializeAddress(k, "guardian", c.guardian);
         vm.serializeAddress(k, "sequencerUptimeFeed", c.sequencerUptimeFeed);
+        vm.serializeAddress(k, "usdtFeed", vm.envOr("USDT_FEED", address(0)));
+        vm.serializeAddress(k, "usdcFeed", vm.envOr("USDC_FEED", address(0)));
+        vm.serializeUint(k, "feedStaleness", vm.envOr("FEED_STALENESS", uint256(90_000)));
         vm.serializeAddress(k, "feeRecipient", c.feeRecipient);
         vm.serializeUint(k, "basketId", c.basketId);
         vm.serializeUint(k, "initialIndex", c.initialIndex);

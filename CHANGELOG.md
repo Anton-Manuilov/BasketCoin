@@ -3,7 +3,8 @@
 ## v5.2 — исправления по автоматическому ИИ-скану Nethermind AuditAgent (ветка `feat/v5.2-auditagent-fixes` от `c7bab24`)
 
 Подробно: `audit/AUDITAGENT_RESPONSE.md`. Это ответы на автоматический ИИ-скан, не аудит.
-- **AA-1 (High)** — `freezeStableMint(stable)`: owner или guardian мгновенно запрещают минт в стейбле (депег стейбла без
+- **AA-1 (High)** — USDT/USDC с Chainlink-фидами с момента деплоя (новые параметры конструктора `usdtFeed_`, `usdcFeed_`,
+  `feedStaleness_`; адреса в `config/chainlink-feeds.md`). Резерв: `freezeStableMint(stable)`: owner или guardian мгновенно запрещают минт в стейбле (депег стейбла без
   фида). Снятие `unfreezeStableMint` — только таймлок 2 дня. Выкуп не блокируется.
 - **AA-2** — окно заморозки перед 28-м считается по интервалу `[now, now + mintFreezeSec]`: без разрыва при любой длительности до 2 дней.
 - **AA-3** — `setWorkingPrice` без изменений в коде; правила (шаг ≤ 0,5%, мониторинг) в `DISCLOSURES.md` D-1.
@@ -14,7 +15,7 @@
 - **AA-6** — `previewMint` ревертит теми же ошибками, что и `mint`; `quoteRedeem.executableNow` учитывает валидность фида
   и секвенсор; `isDepegged` и события депега считают недоступный фид непригодным.
 - **AA-7** — комиссии копятся в `accruedFees[stable]`, забираются `claimFees(stable)` (кто угодно, получатель — казна).
-- Тесты: 275/275 (новый `test/unit/V52.t.sol`, 18 инвариантов). Slither: 0 High / 0 Medium.
+- Тесты: 277/277 (новый `test/unit/V52.t.sol`, 18 инвариантов). Slither: 0 High / 0 Medium.
 
 ## v5.1 — исправления по ИИ-ревью (ветка `feat/v5.1-fixes` от `e762460`, на ревью у Антона, не опубликовано)
 

@@ -183,7 +183,18 @@ contract AdminTest is BaseTest {
         vm.expectRevert(abi.encodeWithSelector(BasketVault.InvalidFeeRecipient.selector, address(vault)));
         vault.setFeeRecipient(address(vault));
         vm.expectRevert(BasketVault.ZeroAddress.selector);
-        new BasketVault(owner, address(0), address(usdt), address(usdc), 50e18, address(0), address(0));
+        new BasketVault(
+            owner,
+            address(0),
+            address(usdt),
+            address(usdc),
+            50e18,
+            address(0),
+            address(0),
+            IAggregatorV3(address(0)),
+            IAggregatorV3(address(0)),
+            0
+        );
     }
 
     function test_FeeRecipient_EventAndZero() public {
@@ -199,11 +210,44 @@ contract AdminTest is BaseTest {
 
     function test_Constructor_ZeroAndDuplicateStables() public {
         vm.expectRevert(BasketVault.ZeroAddress.selector);
-        new BasketVault(owner, treasury, address(0), address(usdc), 50e18, address(0), address(0));
+        new BasketVault(
+            owner,
+            treasury,
+            address(0),
+            address(usdc),
+            50e18,
+            address(0),
+            address(0),
+            IAggregatorV3(address(0)),
+            IAggregatorV3(address(0)),
+            0
+        );
         vm.expectRevert(abi.encodeWithSelector(BasketVault.StableAlreadyEnabled.selector, address(usdt)));
-        new BasketVault(owner, treasury, address(usdt), address(usdt), 50e18, address(0), address(0));
+        new BasketVault(
+            owner,
+            treasury,
+            address(usdt),
+            address(usdt),
+            50e18,
+            address(0),
+            address(0),
+            IAggregatorV3(address(0)),
+            IAggregatorV3(address(0)),
+            0
+        );
         vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableInvalidOwner.selector, address(0)));
-        new BasketVault(address(0), treasury, address(usdt), address(usdc), 50e18, address(0), address(0));
+        new BasketVault(
+            address(0),
+            treasury,
+            address(usdt),
+            address(usdc),
+            50e18,
+            address(0),
+            address(0),
+            IAggregatorV3(address(0)),
+            IAggregatorV3(address(0)),
+            0
+        );
     }
 
     // ------------------------------------------------ доступ: все owner-функции

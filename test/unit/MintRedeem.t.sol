@@ -52,9 +52,31 @@ contract MintRedeemTest is BaseTest {
 
     function test_MinMint_ConstructorBounds() public {
         vm.expectRevert(abi.encodeWithSelector(BasketVault.MinMintOutOfRange.selector, 49e18));
-        new BasketVault(owner, treasury, address(usdt), address(usdc), 49e18, address(0), address(0));
+        new BasketVault(
+            owner,
+            treasury,
+            address(usdt),
+            address(usdc),
+            49e18,
+            address(0),
+            address(0),
+            IAggregatorV3(address(0)),
+            IAggregatorV3(address(0)),
+            0
+        );
         vm.expectRevert(abi.encodeWithSelector(BasketVault.MinMintOutOfRange.selector, 1_001e18));
-        new BasketVault(owner, treasury, address(usdt), address(usdc), 1_001e18, address(0), address(0));
+        new BasketVault(
+            owner,
+            treasury,
+            address(usdt),
+            address(usdc),
+            1_001e18,
+            address(0),
+            address(0),
+            IAggregatorV3(address(0)),
+            IAggregatorV3(address(0)),
+            0
+        );
     }
 
     function test_MinMint_UsesConservativePriceBelowOne() public {
@@ -181,7 +203,18 @@ contract MintRedeemTest is BaseTest {
         vm.expectRevert(abi.encodeWithSelector(BasketVault.UnsupportedDecimals.selector, 19));
         vault.proposeStable(address(s19), IAggregatorV3(address(0)), 0);
         vm.expectRevert(abi.encodeWithSelector(BasketVault.UnsupportedDecimals.selector, 19));
-        new BasketVault(owner, treasury, address(s19), address(usdc), 50e18, address(0), address(0));
+        new BasketVault(
+            owner,
+            treasury,
+            address(s19),
+            address(usdc),
+            50e18,
+            address(0),
+            address(0),
+            IAggregatorV3(address(0)),
+            IAggregatorV3(address(0)),
+            0
+        );
     }
 
     // ------------------------------------------------ нестандартные токены

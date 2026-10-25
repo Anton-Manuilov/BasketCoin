@@ -3,6 +3,7 @@ pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
 import {BasketVault} from "../../src/BasketVault.sol";
+import {IAggregatorV3} from "../../src/interfaces/IAggregatorV3.sol";
 import {BasketToken} from "../../src/BasketToken.sol";
 import {MockStable} from "../mocks/Mocks.sol";
 
@@ -120,8 +121,18 @@ contract MintLimitsInvariantTest is Test {
         vm.warp(1792368000);
         usdt = new MockStable("Tether USD", "USDT", 6);
         MockStable usdc = new MockStable("USD Coin", "USDC", 6);
-        vault =
-            new BasketVault(owner, makeAddr("treasury"), address(usdt), address(usdc), 50e18, address(0), address(0));
+        vault = new BasketVault(
+            owner,
+            makeAddr("treasury"),
+            address(usdt),
+            address(usdc),
+            50e18,
+            address(0),
+            address(0),
+            IAggregatorV3(address(0)),
+            IAggregatorV3(address(0)),
+            0
+        );
         coin = new BasketToken("BasketCoin", "BKT", owner);
         vm.startPrank(owner);
         coin.grantRole(coin.MINTER_ROLE(), address(vault));

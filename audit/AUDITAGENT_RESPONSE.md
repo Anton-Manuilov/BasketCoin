@@ -20,7 +20,7 @@
 
 | ID | Severity | Finding | Status |
 |---|---|---|---|
-| AA-1 | High | Unexpiring manual price lets depegged feedless stables drain healthy reserves | Mitigated (code + disclosure) |
+| AA-1 | High | Unexpiring manual price lets depegged feedless stables drain healthy reserves | Fixed (Chainlink feeds + instant per-stable freeze) |
 | AA-2 | Medium | Pre-index mint freeze leaves a gap when `mintFreezeSec` > 1 day | Fixed |
 | AA-3 | Medium | Immediate `setWorkingPrice` allows mint–redeem sandwiches | Acknowledged (operational controls + disclosure) |
 | AA-4 | Medium | Linear previous-window decay permits minting above the hourly cap | Fixed |
@@ -30,13 +30,16 @@
 
 ## Details
 
-### AA-1 (High) — feedless stables priced at $1 indefinitely — **Mitigated**
-New `freezeStableMint(stable)`: the owner **or guardian** can disable minting with a specific stablecoin instantly,
-without the 2-day timelock. Lifting the freeze (`unfreezeStableMint`) goes through the 2-day timelock. This closes the
-entry leg of the attack (deposit the discounted stable at $1). Redemption in that stable stays open so holders can always
-exit. `previewMint` reports the same `StableMintIsFrozen` error. Residual risk: protection depends on detecting the depeg
-(we monitor it); on mainnet we plan Chainlink feeds for USDT/USDC so a depeg blocks operations automatically.
-Disclosed in `DISCLOSURES.md` D-5 and D-2. Tests: `test/unit/V52.t.sol` `test_AA1_*`.
+### AA-1 (High) — feedless stables priced at $1 indefinitely — **Fixed**
+**Primary fix:** USDT and USDC now use Chainlink USDT/USD and USDC/USD price feeds from deployment. The vault
+constructor takes both feeds and a staleness limit (25 h for a 24 h heartbeat) and rejects a feed that does not return a
+valid answer. The manual $1 price is no longer used for them. If the market price leaves $0.95–$1.05, or the feed is
+stale or broken, mint and redeem in that stable revert automatically and its reserve is excluded from coverage. Feed
+addresses (Base Sepolia and Base mainnet) are in `config/chainlink-feeds.md`.
+**Backup:** new `freezeStableMint(stable)` — the owner **or guardian** can disable minting with a specific stablecoin
+instantly, without the 2-day timelock (e.g. on a feed failure or a depeg inside the ±5% band). Lifting it
+(`unfreezeStableMint`) goes through the 2-day timelock. Redemption stays open. Disclosed in `DISCLOSURES.md` D-5.
+Tests: `test/unit/V52.t.sol` `test_AA1_*`.
 
 ### AA-2 (Medium) — freeze gap — **Fixed**
 `_mintFreeze` now checks whether the interval `[now, now + mintFreezeSec]` reaches 00:00 UTC on the 28th (instead of
@@ -75,5 +78,5 @@ permissionless `claimFees(stable)`. A blacklisted or reverting fee recipient can
 Invariant: vault balance = reserves + accrued fees. Tests: `test_AA7_*`, invariant suite.
 
 ## Verification
-- Foundry: 275/275 tests pass (including 18 invariants and new `test/unit/V52.t.sol`).
+- Foundry: 277/277 tests pass (including 18 invariants and new `test/unit/V52.t.sol`).
 - Slither: 0 High, 0 Medium (20 Low, 2 Informational; see `docs/AUDIT_PACKAGE/appendix/slither-v5.2.txt`).

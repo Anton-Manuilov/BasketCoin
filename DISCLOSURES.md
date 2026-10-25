@@ -46,8 +46,8 @@
 Держатель, который ожидает снижения индекса, может выкупить по старой цене. Это осознанный выбор в пользу права на выход.
 
 ### D-5. Стейблы без фида (AuditAgent AA-1)
-USDT и USDC в тестовой сети работают без фида, по ручной цене $1, которая сама не устаревает. При реальном депеге
-можно было бы внести подешевевший стейбл по $1 и выкупить здоровый. С v5.2 owner или guardian **мгновенно** (без
+С v5.2 USDT и USDC подключены к Chainlink-фидам USDT/USD и USDC/USD сразу при деплое (адреса — `config/chainlink-feeds.md`):
+депег, устаревший или сломанный фид блокируют операции в этом стейбле автоматически. Резервная мера:  owner или guardian **мгновенно** (без
 таймлока) запрещают минт в этом стейбле (`freezeStableMint`); снять запрет можно только через таймлок 2 дня
 (`unfreezeStableMint`). Выкуп в этом стейбле не блокируется. Защита зависит от того, насколько быстро guardian заметит
 депег (мониторинг). В mainnet для USDT/USDC рекомендуется подключить Chainlink-фиды (`setStableFeed`, таймлок 2 дня),
@@ -97,8 +97,8 @@ The v5.1 freeze covers minting only. Redemption stays open before the 28th so th
 A holder who expects the index to fall can redeem at the old price. This is a deliberate choice in favour of the right to exit.
 
 ### D-5. Feedless stablecoins (AuditAgent AA-1)
-On testnet USDT and USDC have no feed and use a manual $1 price that never goes stale. In a real depeg, someone could
-deposit the cheap stablecoin at $1 and redeem the healthy one. Since v5.2 the owner or guardian can **instantly** (no
+Since v5.2 USDT and USDC use Chainlink USDT/USD and USDC/USD feeds from deployment (addresses in
+`config/chainlink-feeds.md`): a depeg or a stale/broken feed blocks operations in that stablecoin automatically. Backup: the owner or guardian can **instantly** (no
 timelock) disable minting with that stablecoin (`freezeStableMint`); lifting it requires the 2-day timelock
 (`unfreezeStableMint`). Redemption in that stablecoin stays open. Protection depends on how quickly the guardian
 detects the depeg (monitoring). On mainnet, Chainlink feeds for USDT/USDC are recommended (`setStableFeed`, 2-day

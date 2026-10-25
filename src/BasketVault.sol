@@ -479,6 +479,9 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
     /// @param minMintUsd_ минимальный минт, USD 18 знаков, в диапазоне [$50, $1000]
     /// @param guardian_ guardian паузы (address(0) — нет)
     /// @param sequencerUptimeFeed_ Chainlink L2 Sequencer Uptime Feed (address(0) — проверка отключена)
+    /// @param usdtFeed_ Chainlink USDT/USD (address(0) — ручная цена $1)
+    /// @param usdcFeed_ Chainlink USDC/USD (address(0) — ручная цена $1)
+    /// @param feedStaleness_ допустимый возраст ответа фидов USDT/USDC, с
     // slither-disable-start missing-zero-check — проверка в _validateFeeRecipient
     // forge-lint: disable-start(missing-zero-check) — fee: _validateFeeRecipient; guardian/фид: 0 = выключено
     constructor(
@@ -488,7 +491,10 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
         address usdc,
         uint256 minMintUsd_,
         address guardian_,
-        address sequencerUptimeFeed_
+        address sequencerUptimeFeed_,
+        IAggregatorV3 usdtFeed_,
+        IAggregatorV3 usdcFeed_,
+        uint256 feedStaleness_
     ) Ownable(owner_) {
         _validateFeeRecipient(feeRecipient_);
         if (minMintUsd_ < MIN_MINT_LOWER || minMintUsd_ > MIN_MINT_UPPER) revert MinMintOutOfRange(minMintUsd_);
@@ -507,8 +513,11 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
         mintFreezeSec = DEFAULT_MINT_FREEZE;
         emit MintFreezeUpdated(0, DEFAULT_MINT_FREEZE);
         // forge-lint: disable-end(missing-zero-check)
-        _addStable(usdt, IAggregatorV3(address(0)), 0, false);
-        _addStable(usdc, IAggregatorV3(address(0)), 0, false);
+        // v5.2 (AA-1): USDT/USDC сразу с Chainlink-фидами (address(0) — только ручная цена). Фид обязан отвечать валидно.
+        _addStable(usdt, usdtFeed_, feedStaleness_, false);
+        _addStable(usdc, usdcFeed_, feedStaleness_, false);
+        if (address(usdtFeed_) != address(0)) _requireFeedOk(usdt, usdtFeed_, feedStaleness_);
+        if (address(usdcFeed_) != address(0)) _requireFeedOk(usdc, usdcFeed_, feedStaleness_);
     }
 
     // slither-disable-end missing-zero-check
@@ -1346,6 +1355,11 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
         });
         stableList.push(stable);
         emit StableAdded(stable, dec, address(feed), maxFeedStaleness, viaTimelock);
+    }
+
+    function _requireFeedOk(address stable, IAggregatorV3 feed, uint256 staleness) internal view {
+        (bool ok,) = _readFeed(address(feed), staleness);
+        if (!ok) revert FeedUnavailable(stable);
     }
 
     function _basket(uint256 basketId) internal view returns (Basket storage b) {
