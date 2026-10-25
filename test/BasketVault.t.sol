@@ -72,7 +72,7 @@ contract BasketVaultTest is Test {
     function test_Mint_FeeAndBuffer() public {
         uint256 out = _mint(alice, address(usdt), 1_000e6);
         // fee = 3 USDT, net = 997 USDT, tokens = 997 / 1.2 = 830.8333...
-        assertEq(usdt.balanceOf(treasury), 3e6, "fee to treasury");
+        assertEq((usdt.balanceOf(treasury) + vault.accruedFees(address(usdt))), 3e6, "fee to treasury");
         assertEq(vault.reserves(BASKET, address(usdt)), 997e6, "reserve");
         assertEq(out, 830833333333333333333, "tokens out");
         assertEq(coin.balanceOf(alice), out);
@@ -146,10 +146,12 @@ contract BasketVaultTest is Test {
         assertEq(usdt.balanceOf(alice) - balBefore, out);
         assertEq(coin.balanceOf(alice), 0, "burned");
         assertEq(coin.totalSupply(), 0);
-        assertEq(usdt.balanceOf(treasury), 3e6 + 2492500, "fees");
+        assertEq((usdt.balanceOf(treasury) + vault.accruedFees(address(usdt))), 3e6 + 2492500, "fees");
         // буфер ~166.17 USDT остаётся в резерве
         assertEq(vault.reserves(BASKET, address(usdt)), 997e6 - 830833333);
-        assertEq(usdt.balanceOf(address(vault)), vault.reserves(BASKET, address(usdt)));
+        assertEq(
+            usdt.balanceOf(address(vault)), vault.reserves(BASKET, address(usdt)) + vault.accruedFees(address(usdt))
+        );
     }
 
     function test_Redeem_Partial() public {
@@ -300,13 +302,13 @@ contract BasketVaultTest is Test {
         // фид устарел -> fallback на ручную цену ($1)
         vm.warp(block.timestamp + 2 days);
         assertEq(vault.stablePrice(address(usdt)), 1e18);
-        assertFalse(vault.isDepegged(address(usdt)));
+        assertTrue(vault.isDepegged(address(usdt))); // v5.2 (AA-6): устаревший фид = непригоден, как в mint/redeem
 
         // свежий, но фид сломан (revert) -> fallback
         feed.set(0.93e8, block.timestamp);
         assertTrue(vault.isDepegged(address(usdt)));
         feed.setBroken(true);
-        assertFalse(vault.isDepegged(address(usdt)));
+        assertTrue(vault.isDepegged(address(usdt))); // v5.2 (AA-6)
         // этап B: mint/redeem не откатываются на ручную цену при сломанном фиде
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(BasketVault.FeedUnavailable.selector, address(usdt)));
@@ -491,7 +493,10 @@ contract BasketVaultTest is Test {
         vm.prank(address(vault));
         vault.setFeeRecipient(t2);
         _mint(alice, address(usdt), 1_000e6);
+        assertEq(vault.accruedFees(address(usdt)), 3e6); // v5.2: pull-модель
+        vault.claimFees(address(usdt));
         assertEq(usdt.balanceOf(t2), 3e6);
+        assertEq(vault.accruedFees(address(usdt)), 0);
         vm.prank(address(vault));
         vm.expectRevert(BasketVault.ZeroAddress.selector);
         vault.setFeeRecipient(address(0));
@@ -529,6 +534,8 @@ contract BasketVaultTest is Test {
         vm.prank(alice);
         vault.redeem(BASKET, address(usdt), tokens, 0);
         assertLe(usdt.balanceOf(alice), before);
-        assertEq(usdt.balanceOf(address(vault)), vault.reserves(BASKET, address(usdt)));
+        assertEq(
+            usdt.balanceOf(address(vault)), vault.reserves(BASKET, address(usdt)) + vault.accruedFees(address(usdt))
+        );
     }
 }

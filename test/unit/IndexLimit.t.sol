@@ -233,7 +233,9 @@ contract IndexLimitTest is BaseTest {
         } catch (bytes memory err) {
             assertFalse(within, "rejected inside +-11%");
             assertEq(
-                err, abi.encodeWithSelector(BasketVault.IndexChangeTooLarge.selector, 2, old, newIdx, rlo, rhi), "error args"
+                err,
+                abi.encodeWithSelector(BasketVault.IndexChangeTooLarge.selector, 2, old, newIdx, rlo, rhi),
+                "error args"
             );
             assertEq(_idx(2), old);
             // попытка месяца не сгорела

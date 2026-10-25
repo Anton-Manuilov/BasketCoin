@@ -158,10 +158,12 @@ contract ReentrancyTest is BaseTest {
     function test_Reenter_FromFeeRecipientHook() public {
         vm.prank(address(vault));
         vault.setFeeRecipient(address(attacker));
-        attacker.configure(Attacker.Action.Mint, true);
+        // v5.2 (AA-7): комиссия больше не переводится внутри mint — хук казны срабатывает только в claimFees
         vm.prank(alice);
-        vm.expectRevert(REENTRANT);
         vault.mint(BASKET, address(hook), 1_000e6, 0);
+        attacker.configure(Attacker.Action.Mint, true);
+        vm.expectRevert(REENTRANT);
+        vault.claimFees(address(hook));
     }
 
     /// CEI в redeem: во время внешнего перевода резерв уже уменьшен, токены сожжены —

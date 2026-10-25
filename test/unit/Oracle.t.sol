@@ -332,6 +332,7 @@ contract FeedDoSRegressionTest is BaseTest {
         MockFeed f = new MockFeed(8, 0.5e8);
         f.setRounds(10, 9);
         _setFeed(address(f));
-        assertFalse(vault.isDepegged(address(usdt)), "stale/incomplete answer ignored");
+        // v5.2 (AA-6): неполный раунд = фид непригоден → isDepegged true (как отказ FeedUnavailable в mint/redeem)
+        assertTrue(vault.isDepegged(address(usdt)), "incomplete answer = unusable");
     }
 }

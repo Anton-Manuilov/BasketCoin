@@ -122,6 +122,10 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
     ///         (или до конца 28-го, если индекс в этом месяце не меняли). Выкуп не замораживается.
     uint256 public constant DEFAULT_MINT_FREEZE = 6 hours;
     uint256 public constant MAX_MINT_FREEZE = 2 days;
+    /// @notice v5.2 (AA-4): часовой лимит считается по 10-минутным корзинам; учитываются текущая и 6 предыдущих,
+    ///         поэтому любой минт моложе часа всегда засчитан (память лимита 60–70 мин, без «затухания»).
+    uint256 public constant MINT_BUCKET = 10 minutes;
+    uint256 public constant MINT_BUCKETS = 7;
 
     /// @notice Уровень выкупа корзины.
     enum RedeemTier {
@@ -231,19 +235,23 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
 
     /// @notice v5: учёт использованных лимитов корзины (USD 18 знаков, оценка нетто-взноса по min(p,$1)).
     struct MintWindow {
-        uint64 window; // номер окна: block.timestamp / MINT_WINDOW
         uint64 blockNumber;
-        uint256 windowUsedUsd;
         uint256 blockUsedUsd;
-        uint256 prevWindowUsedUsd; // v5.1: использовано в предыдущем окне (скользящее окно)
+        uint64[7] bucketId; // v5.2: номер 10-минутной корзины (block.timestamp / MINT_BUCKET) в слоте id % 7
+        uint256[7] bucketUsedUsd; // использовано в этой корзине
     }
 
     /// @notice v5: текущие параметры ограничителя минта.
     MintLimits public mintLimits;
     /// @notice v5: учёт лимитов по корзинам.
-    mapping(uint256 basketId => MintWindow) public mintWindows;
+    mapping(uint256 basketId => MintWindow) internal mintWindows;
     /// @notice v5.1 (M1): длительность заморозки минта перед 28-м числом, с (0 — выключено). Таймлок PARAM_DELAY.
     uint256 public mintFreezeSec;
+
+    /// @notice v5.2 (AA-1): стейбл аварийно заморожен для минта (owner или guardian, мгновенно). Снятие — таймлок.
+    mapping(address stable => bool) public stableMintFrozen;
+    /// @notice v5.2 (AA-7): накопленные комиссии протокола по стейблам (pull: claimFees переводит казне).
+    mapping(address stable => uint256) public accruedFees;
 
     // ---------------------------------------------------------------------
     // События
@@ -392,6 +400,10 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
     event MintLimitsUpdated(uint256 floorBps, uint256 taperBps, uint256 hourCapBps, uint256 blockCapBps);
     /// @notice v5.1: изменена длительность заморозки минта перед setIndex.
     event MintFreezeUpdated(uint256 oldSec, uint256 newSec);
+    /// @notice v5.2: стейбл заморожен/разморожен для минта.
+    event StableMintFrozen(address indexed stable, bool frozen, address indexed by);
+    /// @notice v5.2: комиссии переведены казне.
+    event FeesClaimed(address indexed stable, address indexed to, uint256 amount);
 
     // ---------------------------------------------------------------------
     // Ошибки
@@ -443,6 +455,9 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
     error MintFrozenBeforeIndex(uint256 basketId, uint256 year, uint256 month);
     error MintFreezeOutOfRange(uint256 sec);
     error GenesisTopUpRequired(uint256 basketId, uint256 missingUsd);
+    // v5.2
+    error StableMintIsFrozen(address stable);
+    error SequencerFeedHealthy();
 
     /// @dev Функция вызывается только через таймлок: scheduleOp → (задержка) → executeOp.
     modifier onlyTimelock() {
@@ -482,6 +497,7 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
         emit FeeRecipientUpdated(address(0), feeRecipient_);
         emit MinMintUpdated(0, minMintUsd_);
         guardian = guardian_;
+        if (sequencerUptimeFeed_ != address(0)) _validateSequencerFeed(sequencerUptimeFeed_); // v5.2 (AA-5)
         sequencerUptimeFeed = sequencerUptimeFeed_;
         emit GuardianUpdated(address(0), guardian_);
         emit SequencerUptimeFeedUpdated(address(0), sequencerUptimeFeed_);
@@ -606,7 +622,7 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
         if (block.timestamp < p.executeAfter) revert TimelockNotExpired(p.executeAfter);
         delete pendingStables[stable];
         _addStable(stable, p.feed, p.maxFeedStaleness, true);
-        _syncDepeg(stable, _price(stables[stable]));
+        _syncDepeg(stable, _coveragePrice(stables[stable]));
     }
 
     /// @notice Отменить заявку на стейбл.
@@ -628,7 +644,7 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
         uint256 oldPrice = stables[stable].manualPrice;
         stables[stable].manualPrice = price;
         emit ManualPriceUpdated(stable, oldPrice, price);
-        _syncDepeg(stable, _price(stables[stable]));
+        _syncDepeg(stable, _coveragePrice(stables[stable]));
         _syncAllTiers();
     }
 
@@ -642,7 +658,7 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
         emit StableFeedUpdated(stable, address(s.feed), address(feed), s.maxFeedStaleness, maxFeedStaleness);
         s.feed = feed;
         s.maxFeedStaleness = maxFeedStaleness;
-        _syncDepeg(stable, _price(s));
+        _syncDepeg(stable, _coveragePrice(s));
         _syncAllTiers();
     }
 
@@ -717,17 +733,56 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
     /// @param feed адрес фида (address(0) — отключить проверку)
     // forge-lint: disable-next-line(missing-zero-check) — address(0) = проверка выключена
     function setSequencerUptimeFeed(address feed) external onlyTimelock {
-        if (feed != address(0)) {
-            // v5.1: новый фид обязан отвечать в формате latestRoundData (EOA/чужой контракт — отказ)
-            (bool ok, uint256 len,) = _staticcallWords5(feed, IAggregatorV3.latestRoundData.selector);
-            if (!ok || len < 160) revert SequencerFeedInvalid();
-        }
+        // v5.2 (AA-5): новый фид обязан давать семантически валидный ответ (answer 0/1, startedAt в прошлом)
+        if (feed != address(0)) _validateSequencerFeed(feed);
         // forge-lint: disable-next-line(reentrancy-events) — выше только staticcall (view)
         emit SequencerUptimeFeedUpdated(sequencerUptimeFeed, feed);
         sequencerUptimeFeed = feed;
     }
 
     // slither-disable-end missing-zero-check
+
+    /// @notice v5.2 (AA-5): немедленно отключить проверку секвенсора (owner или guardian), но ТОЛЬКО если
+    ///         установленный фид сломан (ответ невалиден) — иначе mint/redeem были бы заблокированы на 2+ дня.
+    ///         Если фид исправен (в т.ч. «секвенсор упал» или grace period) — отказ SequencerFeedHealthy.
+    function disableBrokenSequencerFeed() external {
+        if (msg.sender != owner() && msg.sender != guardian) revert NotOwnerOrGuardian(msg.sender);
+        address feed = sequencerUptimeFeed;
+        if (feed == address(0) || _sequencerFeedValid(feed)) revert SequencerFeedHealthy();
+        emit SequencerUptimeFeedUpdated(feed, address(0));
+        sequencerUptimeFeed = address(0);
+    }
+
+    /// @notice v5.2 (AA-1): аварийно запретить минт в стейбле (например, при депеге стейбла без фида, когда
+    ///         ручная цена $1 устарела). Мгновенно, owner или guardian. Выкуп в этом стейбле не блокируется.
+    ///         Снять запрет — только через таймлок (unfreezeStableMint, PARAM_DELAY).
+    /// @param stable включённый стейбл
+    function freezeStableMint(address stable) external {
+        if (msg.sender != owner() && msg.sender != guardian) revert NotOwnerOrGuardian(msg.sender);
+        _activeStable(stable);
+        if (!stableMintFrozen[stable]) {
+            stableMintFrozen[stable] = true;
+            emit StableMintFrozen(stable, true, msg.sender);
+        }
+    }
+
+    /// @notice v5.2 (AA-1): снять запрет минта в стейбле. ТАЙМЛОК PARAM_DELAY.
+    /// @param stable стейбл
+    function unfreezeStableMint(address stable) external onlyTimelock {
+        stableMintFrozen[stable] = false;
+        emit StableMintFrozen(stable, false, msg.sender);
+    }
+
+    /// @notice v5.2 (AA-7): перевести накопленные комиссии казне. Может вызвать кто угодно; получатель — feeRecipient.
+    /// @param stable стейбл
+    function claimFees(address stable) external nonReentrant {
+        uint256 amt = accruedFees[stable];
+        if (amt == 0) revert ZeroAmount();
+        accruedFees[stable] = 0;
+        address to = feeRecipient;
+        emit FeesClaimed(stable, to, amt);
+        IERC20(stable).safeTransfer(to, amt);
+    }
 
     /// @notice Выдать или отозвать роль на токене корзины (Vault должен быть его админом). ТАЙМЛОК ROLE_DELAY.
     /// @param token зарегистрированный токен корзины
@@ -773,9 +828,14 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
         uint256 f = mintFreezeSec;
         if (f == 0) return (false, 0, 0);
         (uint256 y, uint256 m, uint256 d) = DateLib.timestampToDate(block.timestamp);
-        if (d != INDEX_UPDATE_DAY) {
-            (y, m, d) = DateLib.timestampToDate(block.timestamp + f);
-            if (d != INDEX_UPDATE_DAY) return (false, 0, 0);
+        // v5.2 (AA-2): заморожено, если интервал [now, now + f] достигает 28-го 00:00 этого месяца (любая f <= 2 дн.).
+        // После 28-го до следующего 28-го не меньше 27 дней > MAX_MINT_FREEZE, поэтому d > 28 — не заморожено.
+        if (d > INDEX_UPDATE_DAY) return (false, 0, 0);
+        if (d < INDEX_UPDATE_DAY) {
+            // slither-disable-next-line weak-prng — не случайность: начало текущих суток UTC
+            uint256 day28 = block.timestamp - (block.timestamp % 1 days) + (INDEX_UPDATE_DAY - d) * 1 days;
+            // forge-lint: disable-next-line(block-timestamp)
+            if (block.timestamp + f < day28) return (false, 0, 0);
         }
         // slither-disable-next-line incorrect-equality — сравнение ключей месяца
         if (b.lastIndexMonthKey == y * 12 + (m - 1)) return (false, 0, 0); // индекс этого месяца уже зафиксирован
@@ -809,14 +869,7 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
         if (b.token.totalSupply() == 0) return (type(uint256).max, type(uint256).max);
         (uint256 wCap, uint256 bCap) = _mintCaps(basketId, _coverageBps(basketId));
         MintWindow storage w = mintWindows[basketId];
-        // slither-disable-next-line incorrect-equality — сравнение номеров окна/блока, не балансов
-        uint256 win = block.timestamp / MINT_WINDOW;
-        uint256 wUsed = 0;
-        // forge-lint: disable-next-line(block-timestamp)
-        // slither-disable-next-line incorrect-equality — номера окон, не балансы
-        if (w.window == win) wUsed = w.windowUsedUsd + _carried(w.prevWindowUsedUsd);
-        // slither-disable-next-line incorrect-equality — номера окон, не балансы
-        else if (w.window + 1 == win) wUsed = _carried(w.windowUsedUsd);
+        uint256 wUsed = _windowUsed(w);
         // slither-disable-next-line incorrect-equality — сравнение номеров окна/блока, не балансов
         uint256 bUsed = w.blockNumber == block.number ? w.blockUsedUsd : 0;
         windowRemainingUsd = wCap > wUsed ? wCap - wUsed : 0;
@@ -847,14 +900,13 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
         bCap = Math.mulDiv(reserveUsd, uint256(m.blockCapBps) * f, BPS * BPS);
     }
 
-    /// @dev Вес предыдущего окна: prev * (оставшаяся доля текущего окна).
-    function _carried(uint256 prev) internal view returns (uint256) {
-        if (prev == 0) return 0;
-        // forge-lint: disable-next-line(weak-prng) — не случайность: позиция внутри часового окна
-        // slither-disable-next-line weak-prng
-        // aderyn-ignore-next-line(weak-randomness)
-        uint256 elapsed = block.timestamp % MINT_WINDOW;
-        return Math.mulDiv(prev, MINT_WINDOW - elapsed, MINT_WINDOW, Math.Rounding.Ceil);
+    /// @dev v5.2 (AA-4): сумма минтов в текущей и 6 предыдущих 10-минутных корзинах (все минты моложе часа).
+    function _windowUsed(MintWindow storage w) internal view returns (uint256 used) {
+        uint256 cur = block.timestamp / MINT_BUCKET;
+        for (uint256 i; i < MINT_BUCKETS; ++i) {
+            uint256 id = w.bucketId[i];
+            if (id + MINT_BUCKETS > cur && id <= cur) used += w.bucketUsedUsd[i];
+        }
     }
 
     /// @dev Проверка и учёт лимитов окна/блока до минта. Первый минт в пустую корзину (supply == 0)
@@ -864,30 +916,25 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
         if (baskets[basketId].token.totalSupply() == 0) return;
         (uint256 wCap, uint256 bCap) = _mintCaps(basketId, covBefore);
         MintWindow storage w = mintWindows[basketId];
-        uint64 win = uint64(block.timestamp / MINT_WINDOW);
-        if (w.window != win) {
-            // v5.1 (L-2): скользящее окно — предыдущее окно учитывается с линейно убывающим весом
-            // slither-disable-next-line incorrect-equality — номера окон, не балансы
-            w.prevWindowUsedUsd = w.window + 1 == win ? w.windowUsedUsd : 0;
-            w.window = win;
-            w.windowUsedUsd = 0;
+        uint256 used = _windowUsed(w);
+        if (used + usdIn > wCap) revert MintWindowCapExceeded(basketId, usdIn, wCap > used ? wCap - used : 0);
+        uint64 cur = uint64(block.timestamp / MINT_BUCKET);
+        // slither-disable-next-line weak-prng — не случайность: слот кольцевого буфера
+        uint256 slot = cur % MINT_BUCKETS;
+        if (w.bucketId[slot] != cur) {
+            w.bucketId[slot] = cur;
+            w.bucketUsedUsd[slot] = 0;
         }
         uint64 bn = uint64(block.number);
         if (w.blockNumber != bn) {
             w.blockNumber = bn;
             w.blockUsedUsd = 0;
         }
-        uint256 wNew = w.windowUsedUsd + usdIn;
-        uint256 carried = _carried(w.prevWindowUsedUsd);
-        if (wNew + carried > wCap) {
-            uint256 usedEff = w.windowUsedUsd + carried;
-            revert MintWindowCapExceeded(basketId, usdIn, wCap > usedEff ? wCap - usedEff : 0);
-        }
         uint256 bNew = w.blockUsedUsd + usdIn;
         if (bNew > bCap) {
             revert MintBlockCapExceeded(basketId, usdIn, bCap > w.blockUsedUsd ? bCap - w.blockUsedUsd : 0);
         }
-        w.windowUsedUsd = wNew;
+        w.bucketUsedUsd[slot] += usdIn;
         w.blockUsedUsd = bNew;
     }
 
@@ -902,7 +949,7 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
             selector == this.setStableFeed.selector || selector == this.setManualPrice.selector
                 || selector == this.setFeeRecipient.selector || selector == this.setGuardian.selector
                 || selector == this.setSequencerUptimeFeed.selector || selector == this.setMintLimits.selector
-                || selector == this.setMintFreeze.selector
+                || selector == this.setMintFreeze.selector || selector == this.unfreezeStableMint.selector
         ) return PARAM_DELAY;
         if (selector == this.setTokenRole.selector) return ROLE_DELAY;
         return 0;
@@ -990,6 +1037,7 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
         Basket storage b = _basket(basketId);
         Stable storage s = _activeStable(stable);
         if (amount == 0) revert ZeroAmount();
+        if (stableMintFrozen[stable]) revert StableMintIsFrozen(stable);
         _checkSequencer();
         {
             (bool frozen, uint256 fy, uint256 fm) = _mintFreeze(b);
@@ -1019,7 +1067,7 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
         );
 
         reserves[basketId][stable] += net;
-        IERC20(stable).safeTransfer(feeRecipient, lg.fee); // fee > 0 всегда (ceil, received >= $50)
+        accruedFees[stable] += lg.fee; // v5.2 (AA-7): pull-модель, казна забирает через claimFees
         // forge-lint: disable-next-line(reentrancy-no-eth) — функция под nonReentrant; токен — доверенный BasketToken
         b.token.mint(msg.sender, tokensOut);
 
@@ -1051,7 +1099,7 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
         uint256 covBefore = _coverageBps(basketId);
         uint256 received = _pull(stable, amount);
         reserves[basketId][stable] += received;
-        _syncDepeg(stable, _price(s));
+        _syncDepeg(stable, _coveragePrice(s));
         uint256 covAfter = _coverageBps(basketId);
         // forge-lint: disable-next-line(reentrancy-events) — функция под nonReentrant
         emit ReserveToppedUp(basketId, msg.sender, stable, received, covBefore, covAfter);
@@ -1072,7 +1120,7 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
     /// @param stable включённый стейбл
     function pokeStable(address stable) external nonReentrant {
         Stable storage s = _activeStable(stable);
-        _syncDepeg(stable, _price(s));
+        _syncDepeg(stable, _coveragePrice(s));
         _syncAllTiers();
     }
 
@@ -1105,7 +1153,7 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
         reserves[basketId][stable] -= gross;
         // forge-lint: disable-next-line(reentrancy-no-eth) — функция под nonReentrant; эффекты (резерв) до вызова
         b.token.burn(msg.sender, tokenAmount);
-        IERC20(stable).safeTransfer(feeRecipient, lg.fee); // fee > 0 (ceil, gross > 0)
+        accruedFees[stable] += lg.fee; // v5.2 (AA-7): pull-модель
         IERC20(stable).safeTransfer(msg.sender, stableOut);
 
         _syncDepeg(stable, lg.stablePrice);
@@ -1130,7 +1178,9 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
     /// @param stable включённый стейбл
     /// @return true — минт и выкуп в этом стейбле заблокированы
     function isDepegged(address stable) public view returns (bool) {
-        return _isDepegged(stablePrice(stable));
+        Stable storage s = _activeStable(stable);
+        // v5.2 (AA-6): недоступный фид = «непригоден» (как в mint/redeem), без отката на ручную цену
+        return _isDepegged(_coveragePrice(s));
     }
 
     /// @notice Сколько токенов выпустится при минте `amount` (без учёта комиссии самого токена за перевод).
@@ -1139,10 +1189,52 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
     /// @param stable стейбл
     /// @param amount сумма стейбла
     /// @return tokensOut токенов корзины
+    /// @dev v5.2 (AA-6): ревертит теми же ошибками, что и mint: пауза, заморозка стейбла, секвенсор, заморозка
+    ///      перед индексом, фид/депег, лимиты окна и блока, пол покрытия / genesis.
     function previewMint(uint256 basketId, address stable, uint256 amount) external view returns (uint256 tokensOut) {
         Basket storage b = _basket(basketId);
         Stable storage s = _activeStable(stable);
-        (,, tokensOut) = _quoteMint(b, s, _price(s), amount);
+        if (amount == 0) revert ZeroAmount();
+        _requireNotPaused();
+        if (stableMintFrozen[stable]) revert StableMintIsFrozen(stable);
+        _checkSequencer();
+        {
+            (bool frozen, uint256 fy, uint256 fm) = _mintFreeze(b);
+            if (frozen) revert MintFrozenBeforeIndex(basketId, fy, fm);
+        }
+        uint256 p = _checkedPrice(stable, s);
+        uint256 net;
+        (, net, tokensOut) = _quoteMint(b, s, p, amount);
+        // slither-disable-next-line incorrect-equality — нулевой выпуск, не баланс
+        if (tokensOut == 0) revert ZeroAmount();
+        _previewMintLimits(basketId, b, _toUsd(net, s.decimals, p < ONE_USD ? p : ONE_USD), tokensOut);
+    }
+
+    function _previewMintLimits(uint256 basketId, Basket storage b, uint256 usdIn, uint256 tokensOut) internal view {
+        uint256 supply = b.token.totalSupply();
+        uint256 covBefore = _coverageBps(basketId);
+        if (supply != 0) {
+            (uint256 wCap, uint256 bCap) = _mintCaps(basketId, covBefore);
+            MintWindow storage w = mintWindows[basketId];
+            uint256 used = _windowUsed(w);
+            if (used + usdIn > wCap) revert MintWindowCapExceeded(basketId, usdIn, wCap > used ? wCap - used : 0);
+            // slither-disable-next-line incorrect-equality — номер блока, не баланс
+            uint256 bUsed = w.blockNumber == block.number ? w.blockUsedUsd : 0;
+            if (bUsed + usdIn > bCap) revert MintBlockCapExceeded(basketId, usdIn, bCap > bUsed ? bCap - bUsed : 0);
+        }
+        uint256 covAfter =
+            Math.mulDiv(Math.mulDiv(_reserveUsd(basketId) + usdIn, 1e18, b.workingPrice), BPS, supply + tokensOut);
+        uint256 floorBps = mintLimits.floorBps;
+        if (covAfter < floorBps) {
+            if (supply == 0) {
+                uint256 need = Math.mulDiv(
+                    Math.mulDiv(tokensOut, b.workingPrice, 1e18, Math.Rounding.Ceil), floorBps, BPS, Math.Rounding.Ceil
+                );
+                uint256 have = _reserveUsd(basketId) + usdIn;
+                revert GenesisTopUpRequired(basketId, need > have ? need - have : 0);
+            }
+            revert MintCoverageFloor(basketId, covAfter, floorBps);
+        }
     }
 
     /// @notice Сколько пользователь получит при выкупе сейчас (с учётом уровня). 0, если выкуп приостановлен.
@@ -1174,6 +1266,8 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
         Basket storage b = _basket(basketId);
         Stable storage s = _activeStable(stable);
         uint256 p = _price(s);
+        // v5.2 (AA-6): исполнимость — по той же цене, что и redeem (фид обязан быть валиден)
+        uint256 execP = _coveragePrice(s);
         q.coverageBps = _coverageBps(basketId);
         q.tier = _tierOf(q.coverageBps);
         q.reserveAvailable = reserves[basketId][stable];
@@ -1186,8 +1280,8 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
             (gross, q.feeNow) = _quoteRedeem(b, s, p, tokenAmount, q.tier == RedeemTier.Full);
             q.payoutNow = gross - q.feeNow;
         }
-        q.executableNow = q.tier != RedeemTier.Suspended && !paused() && !_isDepegged(p) && gross <= q.reserveAvailable
-            && q.payoutNow > 0 && tokenAmount <= b.token.totalSupply();
+        q.executableNow = q.tier != RedeemTier.Suspended && !paused() && execP != 0 && !_isDepegged(execP)
+            && _sequencerOk() && gross <= q.reserveAvailable && q.payoutNow > 0 && tokenAmount <= b.token.totalSupply();
     }
 
     /// @notice Покрытие корзины в bps (12000 = 120%). При totalSupply = 0 возвращает type(uint256).max.
@@ -1290,6 +1384,27 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
         if (r[1] != 0 || r[2] == 0 || r[2] > block.timestamp) revert SequencerFeedInvalid();
         // forge-lint: disable-next-line(block-timestamp)
         if (block.timestamp - r[2] <= SEQUENCER_GRACE_PERIOD) revert SequencerGracePeriod(r[2]);
+    }
+
+    /// @dev v5.2: семантическая проверка ответа фида секвенсора (answer 0/1, 0 < startedAt <= now).
+    function _sequencerFeedValid(address feed) internal view returns (bool) {
+        (bool ok, uint256 len, uint256[5] memory r) = _staticcallWords5(feed, IAggregatorV3.latestRoundData.selector);
+        // forge-lint: disable-next-line(block-timestamp)
+        return ok && len >= 160 && r[1] <= 1 && r[2] != 0 && r[2] <= block.timestamp;
+    }
+
+    function _validateSequencerFeed(address feed) internal view {
+        if (!_sequencerFeedValid(feed)) revert SequencerFeedInvalid();
+    }
+
+    /// @dev Нереверт-версия _checkSequencer для view-котировок.
+    function _sequencerOk() internal view returns (bool) {
+        address feed = sequencerUptimeFeed;
+        if (feed == address(0)) return true;
+        (bool ok, uint256 len, uint256[5] memory r) = _staticcallWords5(feed, IAggregatorV3.latestRoundData.selector);
+        // forge-lint: disable-next-line(block-timestamp)
+        return ok && len >= 160 && r[1] == 0 && r[2] != 0 && r[2] <= block.timestamp
+            && block.timestamp - r[2] > SEQUENCER_GRACE_PERIOD;
     }
 
     /// @dev Цена 18 знаков: фид, если ответ валиден, иначе ручная цена.
@@ -1485,7 +1600,7 @@ contract BasketVault is Ownable2Step, Pausable, ReentrancyGuard {
         uint256 n = stableList.length;
         for (uint256 i; i < n; ++i) {
             address st = stableList[i];
-            _syncDepeg(st, _price(stables[st]));
+            _syncDepeg(st, _coveragePrice(stables[st]));
         }
     }
 

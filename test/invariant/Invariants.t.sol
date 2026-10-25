@@ -87,13 +87,23 @@ abstract contract InvariantBase is Test {
                 vm.writeLine(
                     path,
                     string.concat(
-                        "reason:", n, ":", vm.toString(bytes32(sels[k])), ",", vm.toString(handler.revertCount(n, sels[k])), ",0"
+                        "reason:",
+                        n,
+                        ":",
+                        vm.toString(bytes32(sels[k])),
+                        ",",
+                        vm.toString(handler.revertCount(n, sels[k])),
+                        ",0"
                     )
                 );
             }
         }
-        vm.writeLine(path, string.concat("metric:indexUpdatesChecked,", vm.toString(handler.indexUpdatesChecked()), ",0"));
-        vm.writeLine(path, string.concat("metric:indexLimitRejections,", vm.toString(handler.indexLimitRejections()), ",0"));
+        vm.writeLine(
+            path, string.concat("metric:indexUpdatesChecked,", vm.toString(handler.indexUpdatesChecked()), ",0")
+        );
+        vm.writeLine(
+            path, string.concat("metric:indexLimitRejections,", vm.toString(handler.indexLimitRejections()), ",0")
+        );
         console.log(tag, "run calls/ok:", totalCalls, totalOk);
     }
 }
@@ -107,7 +117,7 @@ contract VaultInvariants is InvariantBase {
     /// 1. Баланс каждого стейбла на Vault >= сумма учтённых резервов по всем корзинам.
     function invariant_BalanceCoversReserves() public view {
         for (uint256 j; j < stables.length; ++j) {
-            uint256 sum = vault.reserves(1, stables[j]) + vault.reserves(2, stables[j]);
+            uint256 sum = vault.reserves(1, stables[j]) + vault.reserves(2, stables[j]) + vault.accruedFees(stables[j]);
             assertGe(MockStable(stables[j]).balanceOf(address(vault)), sum);
         }
     }
@@ -115,7 +125,7 @@ contract VaultInvariants is InvariantBase {
     /// 1b. Для стандартных токенов (без комиссии за перевод) — строгое равенство: нет «зависших» средств.
     function invariant_BalanceEqualsReserves() public view {
         for (uint256 j; j < stables.length; ++j) {
-            uint256 sum = vault.reserves(1, stables[j]) + vault.reserves(2, stables[j]);
+            uint256 sum = vault.reserves(1, stables[j]) + vault.reserves(2, stables[j]) + vault.accruedFees(stables[j]);
             assertEq(MockStable(stables[j]).balanceOf(address(vault)), sum);
         }
     }
@@ -146,7 +156,10 @@ contract VaultInvariants is InvariantBase {
     /// 7. Комиссии в казне = ghost-сумма (ghost считается независимо: ceil(0,3%) от суммы минта / gross выкупа).
     function invariant_FeesMatchGhost() public view {
         for (uint256 j; j < stables.length; ++j) {
-            assertEq(MockStable(stables[j]).balanceOf(treasury), handler.ghostFees(stables[j]));
+            assertEq(
+                MockStable(stables[j]).balanceOf(treasury) + vault.accruedFees(stables[j]),
+                handler.ghostFees(stables[j])
+            );
         }
     }
 
@@ -206,7 +219,7 @@ contract NoProfitInvariants is InvariantBase {
 
     function invariant_BalanceCoversReserves() public view {
         for (uint256 j; j < stables.length; ++j) {
-            uint256 sum = vault.reserves(1, stables[j]) + vault.reserves(2, stables[j]);
+            uint256 sum = vault.reserves(1, stables[j]) + vault.reserves(2, stables[j]) + vault.accruedFees(stables[j]);
             assertGe(MockStable(stables[j]).balanceOf(address(vault)), sum);
         }
     }

@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {BaseTest} from "../utils/BaseTest.sol";
+import {Vm} from "forge-std/Vm.sol";
 import {BasketVault} from "../../src/BasketVault.sol";
 import {IAggregatorV3} from "../../src/interfaces/IAggregatorV3.sol";
 import {MockStable, MockFeed} from "../mocks/Mocks.sol";
@@ -282,7 +283,10 @@ contract BoundariesTest is BaseTest {
         vm.warp(block.timestamp + 1 hours + 1);
         vm.recordLogs();
         vault.pokeTier(BASKET);
-        assertEq(vm.getRecordedLogs().length, 0, "no tier change on stale feed");
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        for (uint256 i; i < logs.length; ++i) {
+            assertTrue(logs[i].topics[0] != BasketVault.CoverageTierChanged.selector, "no tier change on stale feed");
+        }
         assertEq(uint256(_tier()), uint256(SUS));
         assertEq(_cov(), 0);
     }

@@ -441,7 +441,9 @@ contract RedeemTiersTest is Test {
         }
         try vault.redeem(BASKET, address(usdt), amount, 0) {
             assertGe(_cov(), covBefore, "coverage decreased");
-            assertEq(usdt.balanceOf(address(vault)), vault.reserves(BASKET, address(usdt)));
+            assertEq(
+                usdt.balanceOf(address(vault)), vault.reserves(BASKET, address(usdt)) + vault.accruedFees(address(usdt))
+            );
         } catch (bytes memory err) {
             // допустимо только округление до нуля на крошечных суммах
             assertEq(bytes4(err), BasketVault.ZeroAmount.selector);

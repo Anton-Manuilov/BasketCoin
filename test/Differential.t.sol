@@ -53,9 +53,7 @@ contract DifferentialRoundingTest is BaseTest {
 
     /// Минт: результат Vault == эталон одной точной делёжкой floor(net*scale*min(p,1)*1e4 / (P*12000)).
     /// Vault считает одной операцией mulDiv — совпадение должно быть точным.
-    function testFuzz_Diff_MintMatchesReference(uint256 seed, uint256 amountUsd, uint256 pBps, uint256 index)
-        public
-    {
+    function testFuzz_Diff_MintMatchesReference(uint256 seed, uint256 amountUsd, uint256 pBps, uint256 index) public {
         (address st, uint256 dec) = _pickStable(seed);
         amountUsd = bound(amountUsd, 50, 1e15); // $50 .. $1e15
         pBps = bound(pBps, 9_500, 10_500);
@@ -76,9 +74,13 @@ contract DifferentialRoundingTest is BaseTest {
     }
 
     /// Выкуп: Vault == точное floor(tokens*P*k / (1e4*max(p,1)*scale)) (одно округление); комиссия = ceil.
-    function testFuzz_Diff_RedeemWithinOneUnitOfExact(uint256 seed, uint256 tokens, uint256 pBps, uint256 index, bool full)
-        public
-    {
+    function testFuzz_Diff_RedeemWithinOneUnitOfExact(
+        uint256 seed,
+        uint256 tokens,
+        uint256 pBps,
+        uint256 index,
+        bool full
+    ) public {
         (address st, uint256 dec) = _pickStable(seed);
         tokens = bound(tokens, 1e12, 1e30);
         pBps = bound(pBps, 9_500, 10_500);
@@ -188,8 +190,8 @@ library RefDate {
         int256 _month = int256(month);
         int256 _day = int256(day);
         int256 __days = _day - 32075 + (1461 * (_year + 4800 + (_month - 14) / 12)) / 4
-            + (367 * (_month - 2 - ((_month - 14) / 12) * 12)) / 12
-            - (3 * ((_year + 4900 + (_month - 14) / 12) / 100)) / 4 - OFFSET19700101;
+            + (367 * (_month - 2 - ((_month - 14) / 12) * 12)) / 12 - (3 * ((_year + 4900 + (_month - 14) / 12) / 100))
+            / 4 - OFFSET19700101;
         return uint256(__days);
     }
 }

@@ -210,6 +210,13 @@ contract VaultHandler is Test {
     }
 
     // ---------------- действия владельца (в т.ч. противоположные: туда-обратно)
+    /// v5.2: казна забирает накопленные комиссии (pull).
+    function claimFees(uint256 stableSeed) external {
+        address st = _stable(stableSeed);
+        if (vault.accruedFees(st) == 0) return;
+        vault.claimFees(st);
+    }
+
     function setManualPrice(uint256 stableSeed, uint256 bps) external {
         calls["setManualPrice"]++;
         address st = _stable(stableSeed);

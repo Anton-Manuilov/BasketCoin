@@ -88,9 +88,9 @@ contract MintRedeemTest is BaseTest {
     // ------------------------------------------------ комиссии и округления
     function test_Fee_MintRoundsUp() public {
         _mint(alice, address(usdt), 50e6); // 150000 ровно
-        assertEq(usdt.balanceOf(treasury), 150_000);
+        assertEq((usdt.balanceOf(treasury) + vault.accruedFees(address(usdt))), 150_000);
         _mint(alice, address(usdt), 50e6 + 1); // 150000,003 → 150001
-        assertEq(usdt.balanceOf(treasury), 150_000 + 150_001);
+        assertEq((usdt.balanceOf(treasury) + vault.accruedFees(address(usdt))), 150_000 + 150_001);
     }
 
     function test_Fee_RedeemRoundsUp_AndDust() public {
@@ -104,9 +104,9 @@ contract MintRedeemTest is BaseTest {
         vm.expectRevert(BasketVault.ZeroAmount.selector);
         vault.redeem(BASKET, address(usdt), 1e12, 0);
         // 2e12 → gross 2, fee 1, выплата 1
-        uint256 before = usdt.balanceOf(treasury);
+        uint256 before = (usdt.balanceOf(treasury) + vault.accruedFees(address(usdt)));
         assertEq(_redeem(alice, address(usdt), 2e12), 1);
-        assertEq(usdt.balanceOf(treasury) - before, 1);
+        assertEq((usdt.balanceOf(treasury) + vault.accruedFees(address(usdt))) - before, 1);
     }
 
     function test_ZeroAmountReverts() public {
@@ -196,8 +196,8 @@ contract MintRedeemTest is BaseTest {
         vault.topUpReserve(BASKET, address(nr), 100e6);
         uint256 out = _redeem(alice, address(nr), t);
         assertEq(out, 828_340_833);
-        assertEq(nr.balanceOf(address(vault)), vault.reserves(BASKET, address(nr)));
-        assertEq(nr.balanceOf(treasury), 3e6 + 2_492_500);
+        assertEq(nr.balanceOf(address(vault)), vault.reserves(BASKET, address(nr)) + vault.accruedFees(address(nr)));
+        assertEq((nr.balanceOf(treasury) + vault.accruedFees(address(nr))), 3e6 + 2_492_500);
     }
 
     function test_FeeOnTransferToken() public {
@@ -209,14 +209,14 @@ contract MintRedeemTest is BaseTest {
         uint256 received = 990e6;
         assertEq(vault.reserves(BASKET, address(fot)), received - _ceilFee(received));
         assertEq(t, ((received - _ceilFee(received)) * 1e12 * 10_000) / 12_000);
-        assertGe(fot.balanceOf(address(vault)), vault.reserves(BASKET, address(fot)));
+        assertGe(fot.balanceOf(address(vault)), vault.reserves(BASKET, address(fot)) + vault.accruedFees(address(fot)));
         vm.prank(alice);
         vault.topUpReserve(BASKET, address(fot), 100e6);
         assertEq(vault.reserves(BASKET, address(fot)), received - _ceilFee(received) + 99e6);
         uint256 balBefore = fot.balanceOf(alice);
         uint256 out = _redeem(alice, address(fot), t);
         assertEq(fot.balanceOf(alice) - balBefore, out - out / 100, "user receives minus token fee");
-        assertGe(fot.balanceOf(address(vault)), vault.reserves(BASKET, address(fot)));
+        assertGe(fot.balanceOf(address(vault)), vault.reserves(BASKET, address(fot)) + vault.accruedFees(address(fot)));
         // минимальный минт применяется к фактически полученной сумме
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(BasketVault.BelowMinMint.selector, 49.5e18, 50e18));
@@ -369,9 +369,7 @@ contract MintRedeemTest is BaseTest {
         uint256 t = _mint(alice, address(usdt), 1_000e6);
         _mint(bob, address(usdt), 1_000e6);
         vm.prank(alice);
-        vm.expectRevert(
-            abi.encodeWithSelector(IERC20Errors.ERC20InsufficientBalance.selector, alice, t, t + 1)
-        );
+        vm.expectRevert(abi.encodeWithSelector(IERC20Errors.ERC20InsufficientBalance.selector, alice, t, t + 1));
         vault.redeem(BASKET, address(usdt), t + 1, 0);
     }
 

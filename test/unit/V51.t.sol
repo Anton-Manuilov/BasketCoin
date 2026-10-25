@@ -189,10 +189,12 @@ contract V51Test is BaseTest {
         vm.prank(bob);
         vm.expectPartialRevert(BasketVault.MintWindowCapExceeded.selector);
         vault.mint(BASKET, address(usdt), chunk, 0);
-        // через полчаса вес прошлого окна ~50%
+        // v5.2 (AA-4): через полчаса минты прошлого окна моложе часа — учитываются полностью, затухания нет
         vm.warp(block.timestamp + 1800);
         _next();
-        _mint(bob, address(usdt), chunk);
+        vm.prank(bob);
+        vm.expectPartialRevert(BasketVault.MintWindowCapExceeded.selector);
+        vault.mint(BASKET, address(usdt), chunk, 0);
         // через два окна — полный лимит
         vm.warp((block.timestamp / 3600 + 2) * 3600);
         _next();

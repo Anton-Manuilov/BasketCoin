@@ -1,4 +1,4 @@
-# BasketCoin v5.1 — раскрытие рисков / Risk Disclosures
+# BasketCoin v5.2 — раскрытие рисков / Risk Disclosures
 
 > При расхождении версий приоритет у русской. / The Russian text is authoritative in case of discrepancy.
 
@@ -14,6 +14,13 @@
 ±3%/±11% в коде, лимиты минта (пол покрытия 150%, часовой и блоковый лимиты), заморозка минта перед 28-м (v5.1),
 публичные события `WorkingPriceUpdated` / `IndexUpdated`, которые можно отслеживать. Права на эмиссию токена
 (`setTokenRole`) меняются только через таймлок 7 дней; параметры — через таймлок 2 дня.
+
+**Сэндвич вокруг смены рабочей цены (AuditAgent AA-3).** Поскольку `setWorkingPrice` действует сразу, третье лицо,
+заранее узнавшее о повышении цены (например, из очереди подписей Safe), может заминтить до изменения и выкупить после.
+Выгода = рост цены − 0,6% комиссий; размер ограничен лимитами минта. Операционные правила владельца: менять рабочую
+цену шагами не больше 0,5% (меньше суммы комиссий — сэндвич одного шага убыточен), не публиковать заранее параметры
+транзакции, отслеживать события `Minted` перед и после `WorkingPriceUpdated` (мониторинг). Ограничение шага в коде
+не включено, чтобы не менять текущий порядок работы; это решение владельца.
 
 ### D-2 (M4). Выбор стейбла при выкупе
 Покрытие считается по корзине в целом, а выплата идёт из резерва выбранного стейбла. Если один стейбл (например, USDT)
@@ -38,6 +45,15 @@
 Заморозка v5.1 закрывает только минт. Выкуп перед 28-м остаётся открытым, чтобы держатели могли выйти в любой момент.
 Держатель, который ожидает снижения индекса, может выкупить по старой цене. Это осознанный выбор в пользу права на выход.
 
+### D-5. Стейблы без фида (AuditAgent AA-1)
+USDT и USDC в тестовой сети работают без фида, по ручной цене $1, которая сама не устаревает. При реальном депеге
+можно было бы внести подешевевший стейбл по $1 и выкупить здоровый. С v5.2 owner или guardian **мгновенно** (без
+таймлока) запрещают минт в этом стейбле (`freezeStableMint`); снять запрет можно только через таймлок 2 дня
+(`unfreezeStableMint`). Выкуп в этом стейбле не блокируется. Защита зависит от того, насколько быстро guardian заметит
+депег (мониторинг). В mainnet для USDT/USDC рекомендуется подключить Chainlink-фиды (`setStableFeed`, таймлок 2 дня),
+тогда депег блокирует операции автоматически. Резерв уже внесённого депегнутого стейбла до смены ручной цены
+учитывается в покрытии по $1 (см. D-2).
+
 ## EN
 
 ### D-1 (M2). Owner price powers
@@ -50,6 +66,13 @@ to ~3% (any day) or up to ~11% (on the 28th) per cycle from the reserve, at the 
 hard-coded ±3%/±11% bands, mint limiter (150% coverage floor, hourly and per-block caps), the pre-index mint freeze
 (v5.1), and public `WorkingPriceUpdated` / `IndexUpdated` events for monitoring. Token minting rights (`setTokenRole`)
 change only through a 7-day timelock; parameters change through a 2-day timelock.
+
+**Sandwich around a working-price change (AuditAgent AA-3).** `setWorkingPrice` takes effect immediately, so a third
+party who learns about a price increase in advance (e.g. from the Safe signing queue) can mint before the change and
+redeem after it. Profit = price increase − 0.6% fees, bounded by the mint limiter. Owner operating rules: change the
+working price in steps of at most 0.5% (below the round-trip fees, so a single-step sandwich loses money), do not
+disclose transaction parameters in advance, and monitor `Minted` events around `WorkingPriceUpdated`. A step limit is
+not enforced in code so as not to change the current workflow; this is the owner's decision.
 
 ### D-2 (M4). Stablecoin choice on redemption
 Coverage is computed per basket, while each payout comes from the reserve of the chosen stablecoin. If one stablecoin
@@ -72,3 +95,12 @@ coverage. This reduces the effect but does not remove it for a slow depeg inside
 ### D-4. Redemption before an index decrease
 The v5.1 freeze covers minting only. Redemption stays open before the 28th so that holders can always exit.
 A holder who expects the index to fall can redeem at the old price. This is a deliberate choice in favour of the right to exit.
+
+### D-5. Feedless stablecoins (AuditAgent AA-1)
+On testnet USDT and USDC have no feed and use a manual $1 price that never goes stale. In a real depeg, someone could
+deposit the cheap stablecoin at $1 and redeem the healthy one. Since v5.2 the owner or guardian can **instantly** (no
+timelock) disable minting with that stablecoin (`freezeStableMint`); lifting it requires the 2-day timelock
+(`unfreezeStableMint`). Redemption in that stablecoin stays open. Protection depends on how quickly the guardian
+detects the depeg (monitoring). On mainnet, Chainlink feeds for USDT/USDC are recommended (`setStableFeed`, 2-day
+timelock) so that a depeg blocks operations automatically. Reserves of the depegged stablecoin already deposited are
+still valued at $1 in coverage until the manual price is changed (see D-2).
