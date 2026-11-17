@@ -1,0 +1,12 @@
+# BasketCoin pre-launch re-verification — 12.11.2026 ~16:32–16:37 UTC+7
+- forge/anvil 1.8.5 (51a52c5, build 2026-10-05) — unchanged vs 09.11; solc 0.8.24 via foundry; Python 3.13.5; kernel 6.12.113 (built 06.11.2026)
+- HEAD 00f84e1; git diff 00f84e1 -- src empty (committed and working tree)
+- forge build OK (lint warnings only: reentrancy-events, block-timestamp, unsafe-typecast — known)
+- forge test: 283/283 passed, 0 failed (test-results-1112.txt)
+- FOUNDRY_PROFILE=ci forge test: 283/283 passed, 130.9 s (test-results-ci-1112.txt)
+- fork-mainnet.sh (anvil #0, block 56428115): ALL OK (fork-results-1112.txt)
+- bash -n all script/*.sh OK; pool-init.py --help OK
+- bktctl.sh: bash -n OK; status: mainnet enabled=n STOP=n; testnet-v52 enabled=n STOP=y; watchdog not running; no bot processes
+- basket-coin.com 200; footer social links present; power-seed.js (live, A, B) still 1.6653 (+1.6622), not 1.6658
+- Note: lib/forge-std .git points to missing .git/modules -> `git status` errors without --ignore-submodules (cosmetic; build unaffected)
+- slither not installed (not re-run); aderyn present, not re-run

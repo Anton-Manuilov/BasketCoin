@@ -1,0 +1,491 @@
+Thu Nov 12 16:33:01 +07 2026
+=== FOUNDRY_PROFILE=ci forge test
+No files changed, compilation skipped
+
+Ran 21 tests for test/unit/Boundaries.t.sol:BoundariesTest
+[PASS] test_115_MinusOneBps_Exact_PlusOneBps() (gas: 2085893)
+[PASS] test_115_OneWeiBelowAndExact() (gas: 1305969)
+[PASS] test_140_MinusOneBps_PlusOneBps() (gas: 1754993)
+[PASS] test_140_OneWeiBelowAndExact() (gas: 845311)
+[PASS] test_PokeTier_NoEventWhenUnchanged_AndUnknownBasket() (gas: 344175)
+[PASS] test_SetIndex_CannotJumpBetweenFullAndSuspendedInOneStep() (gas: 1821541)
+[PASS] test_Source_Feed_BothWaysViaPoke() (gas: 1209715)
+[PASS] test_Source_ManualPrice_BothWays() (gas: 878864)
+[PASS] test_Source_Mint_CannotRaiseToFull() (gas: 653319)
+[PASS] test_Source_Mint_FromZeroSupply_FullToStandard() (gas: 259998)
+[PASS] test_Source_Mint_FullToStandard() (gas: 918637)
+[PASS] test_Source_Mint_SuspendedToStandard() (gas: 696320)
+[PASS] test_Source_Redeem_LastHolder_ToFullZeroSupply() (gas: 369352)
+[PASS] test_Source_Redeem_NeverLowersTier() (gas: 1068171)
+[PASS] test_Source_Redeem_StandardToFull() (gas: 974735)
+[PASS] test_Source_SetIndex_AllDirections() (gas: 790143)
+[PASS] test_Source_TopUp_StandardToFull() (gas: 545135)
+[PASS] test_Source_TopUp_SuspendedToFull_OneStep() (gas: 747995)
+[PASS] test_Source_WorkingPrice_FullStandardBothWays() (gas: 754577)
+[PASS] test_Source_WorkingPrice_StandardSuspendedBothWays() (gas: 584161)
+[PASS] test_TierEvent_CarriesCoverage() (gas: 547213)
+Suite result: ok. 21 passed; 0 failed; 0 skipped; finished in 14.34ms (12.30ms CPU time)
+
+Ran 20 tests for test/unit/Admin.t.sol:AdminTest
+[PASS] test_Access_PublicFunctionsOpen() (gas: 495708)
+[PASS] test_Access_StrangerPendingOwnerAndOldOwner() (gas: 1171872)
+[PASS] test_AddBasket_ErrorsAndEvent() (gas: 330316)
+[PASS] test_Constructor_ZeroAndDuplicateStables() (gas: 11452)
+[PASS] test_Errors_InsufficientReserveArgs() (gas: 666492)
+[PASS] test_Errors_StableNotEnabledEverywhere() (gas: 199667)
+[PASS] test_Errors_UnknownBasketEverywhere() (gas: 162252)
+[PASS] test_Events_ConfigWithArgs() (gas: 564558)
+[PASS] test_FeeRecipient_EventAndZero() (gas: 73695)
+[PASS] test_Regression_F01_SameTokenTwoBaskets() (gas: 46099)
+[PASS] test_Regression_F05_PriceUpperBound() (gas: 555847)
+[PASS] test_Regression_F06_FeeRecipientCannotBeVault() (gas: 37520)
+[PASS] test_Regression_F08_ProposeValidatesTokenEarly() (gas: 632610)
+[PASS] test_Renounce_Disabled() (gas: 22926)
+[PASS] test_Timelock_DuplicateExecuteTwiceCancel() (gas: 1002283)
+[PASS] test_Timelock_ExecuteExactBoundaryAndEvent() (gas: 235985)
+[PASS] test_Timelock_OwnershipChangeDuringWait() (gas: 288335)
+[PASS] test_Timelock_ProposeEmitsAndStores() (gas: 482891)
+[PASS] test_Timelock_ReproposeResetsTimer() (gas: 255372)
+[PASS] test_Token_Roles() (gas: 151127)
+Suite result: ok. 20 passed; 0 failed; 0 skipped; finished in 14.94ms (5.46ms CPU time)
+
+Ran 26 tests for test/unit/Events.t.sol:EventsTest
+[PASS] test_Ev_BasketAdded_WithInitialTier_NoTierEvent() (gas: 236953)
+[PASS] test_Ev_Constructor_AllInitialEvents() (gas: 66214)
+[PASS] test_Ev_Depeg_DetectedInTopUp() (gas: 1246229)
+[PASS] test_Ev_Depeg_RecoveryDetectedInMint() (gas: 958238)
+[PASS] test_Ev_Depeg_ViaPokeStable_AndPokeTier() (gas: 1654211)
+[PASS] test_Ev_ExecuteStable_DepeggedOnArrival() (gas: 1242079)
+[PASS] test_Ev_FeeRecipientUpdated_OldNew() (gas: 46880)
+[PASS] test_Ev_IndexUpdated_OldNewYearMonthTimestamp() (gas: 150951)
+[PASS] test_Ev_IndexUpdated_WithTierChange() (gas: 488183)
+[PASS] test_Ev_ManualPrice_DepegEnterRepeatExit() (gas: 361814)
+[PASS] test_Ev_ManualPrice_TierChangeCarriesCoverage() (gas: 341014)
+[PASS] test_Ev_MinMintUpdated_OldNew() (gas: 48234)
+[PASS] test_Ev_Minted_FirstMint_FullArgs_AndTierEvent() (gas: 597824)
+[PASS] test_Ev_Minted_SecondMint_StablePriceBelowOne_NoTierEvent() (gas: 1088595)
+[PASS] test_Ev_NoTierEvent_WhenTierUnchanged_AllSources() (gas: 1246640)
+[PASS] test_Ev_Ownership_TwoStep() (gas: 94092)
+[PASS] test_Ev_PauseUnpause_StandardOZEvents() (gas: 134224)
+[PASS] test_Ev_Redeemed_Full_WithBuffer_StablePriceAboveOne() (gas: 1221295)
+[PASS] test_Ev_Redeemed_RaisesTier_EmitsTierAfterRedeemed() (gas: 1036995)
+[PASS] test_Ev_Redeemed_Standard_FullArgs() (gas: 903417)
+[PASS] test_Ev_ReserveToppedUp_CoverageBeforeAfter_NoTierChange() (gas: 639605)
+[PASS] test_Ev_ReserveToppedUp_WithTierChangeToFull() (gas: 783081)
+[PASS] test_Ev_RevertedCallsEmitNothing() (gas: 140591)
+[PASS] test_Ev_StableFeedUpdated_OldNew_AndDepegOnSwitch() (gas: 1041579)
+[PASS] test_Ev_StableTimelock_ProposeReproposeCancelExecute() (gas: 1383828)
+[PASS] test_Ev_WorkingPriceUpdated_OldNewIndex() (gas: 327993)
+Suite result: ok. 26 passed; 0 failed; 0 skipped; finished in 19.35ms (16.47ms CPU time)
+
+Ran 3 tests for test/Differential.t.sol:DateLibDifferentialTest
+[PASS] testFuzz_DateLib_MatchesReference(uint256) (runs: 10000, μ: 11188, ~: 11429)
+[PASS] test_DateLib_DailySweep_1970_2200() (gas: 353500808)
+[PASS] test_DateLib_Every28th() (gas: 49308115)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 1.32s (1.32s CPU time)
+
+Ran 14 tests for test/unit/IndexLimit.t.sol:IndexLimitTest
+[PASS] testFuzz_Limit_SucceedsIffWithinBounds(uint256,uint256,uint8,uint256) (runs: 10000, μ: 384212, ~: 367637)
+[PASS] test_Limit_BoundsRoundTowardStrictness() (gas: 813287)
+[PASS] test_Limit_ConstantAndBoundsView() (gas: 27414)
+[PASS] test_Limit_InitialIndexUnlimited() (gas: 1102184)
+[PASS] test_Limit_InsideRange_Succeeds() (gas: 168948)
+[PASS] test_Limit_LargeJumps_Revert_WithArgs() (gas: 320670)
+[PASS] test_Limit_Minus11Exact_Succeeds() (gas: 84552)
+[PASS] test_Limit_Minus11MinusOneWei_Reverts_WithArgs() (gas: 59410)
+[PASS] test_Limit_Plus11Exact_Succeeds() (gas: 87863)
+[PASS] test_Limit_Plus11PlusOneWei_Reverts_WithArgs() (gas: 59477)
+[PASS] test_Limit_RejectionDoesNotBurnMonthAttempt() (gas: 186362)
+[PASS] test_Limit_SequentialMonths_EachFromNewValue() (gas: 381185)
+[PASS] test_Limit_WorkingPriceBandFromNewIndex() (gas: 305394)
+[PASS] test_Limit_ZeroChange_Succeeds() (gas: 79037)
+Suite result: ok. 14 passed; 0 failed; 0 skipped; finished in 1.94s (1.94s CPU time)
+
+Ran 29 tests for test/BasketVault.t.sol:BasketVaultTest
+[PASS] testFuzz_RoundTripNeverProfitable(uint256,uint256) (runs: 10000, μ: 502276, ~: 501925)
+[PASS] test_Access_NonOwnerReverts() (gas: 270311)
+[PASS] test_Access_TokenMintBurnOnlyVault() (gas: 69951)
+[PASS] test_DateLib_KnownDates() (gas: 316817)
+[PASS] test_Depeg_Boundaries() (gas: 286281)
+[PASS] test_Depeg_ConservativePricingInsideBand() (gas: 701130)
+[PASS] test_Depeg_Recovery() (gas: 692588)
+[PASS] test_Depeg_USDT_BlocksOnlyUSDT() (gas: 1015221)
+[PASS] test_Depeg_ViaFeedWithFallback() (gas: 890206)
+[PASS] test_FeeRecipient_Change() (gas: 373103)
+[PASS] test_MinMint_ChangeWithinBounds() (gas: 217707)
+[PASS] test_MinMint_Enforced() (gas: 324363)
+[PASS] test_MinMint_OutOfRangeReverts() (gas: 60582)
+[PASS] test_Mint_AtWorkingPrice() (gas: 299878)
+[PASS] test_Mint_FeeAndBuffer() (gas: 299427)
+[PASS] test_Mint_SlippageReverts() (gas: 163951)
+[PASS] test_Mint_UnknownBasketAndStableRevert() (gas: 119795)
+[PASS] test_Owner_RenounceDisabledAndTwoStepTransfer() (gas: 121865)
+[PASS] test_Pause_BlocksMintAndRedeem() (gas: 547415)
+[PASS] test_Pause_OnlyOwner() (gas: 136262)
+[PASS] test_Redeem_CannotExceedStableReserve() (gas: 732170)
+[PASS] test_Redeem_MoreThanBalanceReverts() (gas: 569956)
+[PASS] test_Redeem_Partial() (gas: 355424)
+[PASS] test_Redeem_ReturnsCollateral() (gas: 432950)
+[PASS] test_SecondBasket_SeparateToken() (gas: 740983)
+[PASS] test_SetIndex_Only28th() (gas: 254358)
+[PASS] test_Timelock_CancelAndNoPending() (gas: 747154)
+[PASS] test_Timelock_NewStable9Days() (gas: 1176030)
+[PASS] test_WorkingPrice_Within3Percent() (gas: 397689)
+Suite result: ok. 29 passed; 0 failed; 0 skipped; finished in 2.70s (2.69s CPU time)
+
+Ran 25 tests for test/unit/MintRedeem.t.sol:MintRedeemTest
+[PASS] test_Decimals_6_8_18_Equivalent() (gas: 3745246)
+[PASS] test_Decimals_Above18_Rejected() (gas: 607216)
+[PASS] test_FeeOnTransferToken() (gas: 1881387)
+[PASS] test_Fee_MintRoundsUp() (gas: 495939)
+[PASS] test_Fee_RedeemRoundsUp_AndDust() (gas: 516792)
+[PASS] test_MinMint_1000_ExactAndMinusOneUnit() (gas: 354845)
+[PASS] test_MinMint_50_ExactAndMinusOneUnit_6dec() (gas: 321659)
+[PASS] test_MinMint_8and18Decimals() (gas: 3078390)
+[PASS] test_MinMint_AppliesBeforeProtocolFee() (gas: 249888)
+[PASS] test_MinMint_ConstructorBounds() (gas: 14127)
+[PASS] test_MinMint_ParamBounds_OneWei() (gas: 121008)
+[PASS] test_MinMint_UsesConservativePriceBelowOne() (gas: 372008)
+[PASS] test_Mint_AtMaxIndex_StillNonZero() (gas: 508317)
+[PASS] test_MultiBasket_ReserveIsolation() (gas: 1312309)
+[PASS] test_MultiBasket_StablePriceChangeSyncsAllBaskets() (gas: 787174)
+[PASS] test_NoReturnToken_USDTLike() (gas: 1269155)
+[PASS] test_Pause_OwnerConfigStillWorks_AndDoublePauseReverts() (gas: 321105)
+[PASS] test_Pause_WithDepeg_PauseCheckedFirst() (gas: 533734)
+[PASS] test_Pause_WithSuspended_TopUpDuringPauseRestores() (gas: 1172564)
+[PASS] test_Redeem_MoreThanBalance() (gas: 554734)
+[PASS] test_ReturnFalseToken_Reverts() (gas: 1724464)
+[PASS] test_Rounding_NeverOverIssues(uint256,uint256) (runs: 10000, μ: 379724, ~: 379498)
+[PASS] test_Slippage_MintAndRedeem_ExactArgs() (gas: 612232)
+[PASS] test_VaultWithoutMinterRole_Reverts() (gas: 379072)
+[PASS] test_ZeroAmountReverts() (gas: 115361)
+Suite result: ok. 25 passed; 0 failed; 0 skipped; finished in 2.13s (2.12s CPU time)
+
+Ran 6 tests for test/unit/Oracle.t.sol:FeedDoSRegressionTest
+[PASS] test_Regression_F02_EOAFeed() (gas: 594289)
+[PASS] test_Regression_F02_GasGuzzlerFeed() (gas: 1211761)
+[PASS] test_Regression_F02_HugeAnswerNoOverflow() (gas: 1060635)
+[PASS] test_Regression_F02_ReturnBombFeed() (gas: 1211933)
+[PASS] test_Regression_F02_ShortReturnFeed() (gas: 695295)
+[PASS] test_Regression_F03_IncompleteRound() (gas: 536896)
+Suite result: ok. 6 passed; 0 failed; 0 skipped; finished in 4.37ms (3.03ms CPU time)
+
+Ran 21 tests for test/unit/Oracle.t.sol:OracleTest
+[PASS] test_DepegBounds_FeedDecimals18() (gas: 1398027)
+[PASS] test_DepegBounds_FeedDecimals6() (gas: 1400712)
+[PASS] test_DepegBounds_FeedDecimals8() (gas: 1400739)
+[PASS] test_DepegBounds_Manual_OneWei() (gas: 367881)
+[PASS] test_Feed_Broken_FallbackAndManualDepegStillWorks() (gas: 632807)
+[PASS] test_Feed_DecimalsAbove18_Fallback() (gas: 535108)
+[PASS] test_Feed_Disable() (gas: 551046)
+[PASS] test_Feed_IncompleteRound_Fallback() (gas: 593591)
+[PASS] test_Feed_NonPositiveAnswer_Fallback() (gas: 586431)
+[PASS] test_Feed_StalenessBoundary() (gas: 540255)
+[PASS] test_Feed_UpdatedAtZeroOrFuture_Fallback() (gas: 610527)
+[PASS] test_Feed_ZeroStalenessOnlySameBlock() (gas: 519731)
+[PASS] test_SetIndex_DayBoundaries() (gas: 139307)
+[PASS] test_SetIndex_SameMonthNextYearAllowed() (gas: 135700)
+[PASS] test_SetIndex_StoresTimestampAndResetsWorkingPrice() (gas: 153034)
+[PASS] test_SetIndex_TwicePerMonthAndSameDay() (gas: 139217)
+[PASS] test_SetIndex_YearChange_February_LeapYear_SkippedMonth() (gas: 374659)
+[PASS] test_SetIndex_ZeroAndUnknownBasket() (gas: 65102)
+[PASS] test_WorkingPrice_BandAfterNewIndex_NonRoundIndex() (gas: 280856)
+[PASS] test_WorkingPrice_ExactBandAndOneWeiOutside() (gas: 217299)
+[PASS] test_WorkingPrice_UnknownBasket() (gas: 37835)
+Suite result: ok. 21 passed; 0 failed; 0 skipped; finished in 5.13ms (3.76ms CPU time)
+
+Ran 6 tests for test/unit/Testnet.t.sol:TestnetTest
+[PASS] testFuzz_Faucet(uint256) (runs: 10000, μ: 52151, ~: 32596)
+[PASS] test_DeployScript_HandsOverToNewOwner() (gas: 18663655)
+Logs:
+  chainId      31337
+  deployer     0x285A34561DEAcCc4993474A62ef07FB2077FE230
+  owner        0x7240b687730BE024bcfD084621f794C2e4F8408f
+  feeRecipient 0xf43Bca55E8091977223Fa5b776E23528D205dcA8
+  guardian     0x619d5D1E620c70442e67726b0E4cBf8c6E111b19
+  seqFeed      0x0000000000000000000000000000000000000000
+  TestUSDT     0xF533024Ef22fB4ddd391C70841346150B6961321
+  TestUSDC     0xeF118465d69b05945e1389B0f1d23460859D2633
+  BasketToken  0x59Fac47ac051452E7f8be24d385F4422fc561997
+  BasketVault  0x640e2a2A625F3001F05b5BFF73d8F97c521A64b8
+  written to   deployments/test-handover.local.json
+
+[PASS] test_DeployScript_SameOwner() (gas: 18661120)
+Logs:
+  chainId      31337
+  deployer     0x285A34561DEAcCc4993474A62ef07FB2077FE230
+  owner        0x285A34561DEAcCc4993474A62ef07FB2077FE230
+  feeRecipient 0xf43Bca55E8091977223Fa5b776E23528D205dcA8
+  guardian     0x619d5D1E620c70442e67726b0E4cBf8c6E111b19
+  seqFeed      0x0000000000000000000000000000000000000000
+  TestUSDT     0xF533024Ef22fB4ddd391C70841346150B6961321
+  TestUSDC     0xeF118465d69b05945e1389B0f1d23460859D2633
+  BasketToken  0x59Fac47ac051452E7f8be24d385F4422fc561997
+  BasketVault  0x640e2a2A625F3001F05b5BFF73d8F97c521A64b8
+  written to   deployments/test-same.local.json
+
+[PASS] test_Faucet_RevertsAboveLimitOrZero() (gas: 56029)
+[PASS] test_Faucet_UpToLimit() (gas: 128498)
+[PASS] test_Metadata() (gas: 40768)
+Suite result: ok. 6 passed; 0 failed; 0 skipped; finished in 192.25ms (195.00ms CPU time)
+
+Ran 12 tests for test/unit/V51.t.sol:V51Test
+[PASS] test_BrokenFeed_AlsoBlocksMintFloor() (gas: 1093757)
+[PASS] test_ExpiredOp_CanBeRescheduled() (gas: 171724)
+[PASS] test_Freeze_DefaultsAndSlot() (gas: 14227)
+[PASS] test_Freeze_FebruaryAndYearBoundary() (gas: 48905)
+[PASS] test_Freeze_LateOn28th_And29th() (gas: 627851)
+[PASS] test_Freeze_LongerWindow() (gas: 137332)
+[PASS] test_Freeze_WindowBefore28th_UntilSetIndex() (gas: 1133730)
+[PASS] test_Genesis_ReportsMissingTopUp_ThenSucceeds() (gas: 600816)
+[PASS] test_SequencerFeed_ValidAccepted() (gas: 252886)
+[PASS] test_SetMintFreeze_TimelockBoundsDisable() (gas: 750915)
+[PASS] test_SlidingWindow_NoDoubleCapAtBoundary() (gas: 1327069)
+[PASS] test_StaleFeed_NoFullRedeemOnInflatedCoverage() (gas: 1364945)
+Suite result: ok. 12 passed; 0 failed; 0 skipped; finished in 7.61ms (6.16ms CPU time)
+
+Ran 16 tests for test/unit/MintLimits.t.sol:MintLimitsTest
+[PASS] testFuzz_Mint_RespectsFloorAndCaps(uint256,uint256,uint256) (runs: 10000, μ: 1549908, ~: 1601203)
+[PASS] testFuzz_SetMintLimits_BoundsRespected(uint256,uint256,uint256,uint256) (runs: 10000, μ: 121343, ~: 121329)
+[PASS] test_BlockCap() (gas: 902213)
+[PASS] test_Capacity_MatchesActualLimit() (gas: 834956)
+[PASS] test_Defaults() (gas: 13509)
+[PASS] test_Floor_RevertsWhenNoTaper() (gas: 1007040)
+[PASS] test_Genesis_WithTopUp_NoRateCap() (gas: 434531)
+[PASS] test_Genesis_WithoutTopUp_RevertsFloor() (gas: 229276)
+[PASS] test_SetIndexDoesNotTouchLimits_ButTaperReacts() (gas: 531065)
+[PASS] test_SetMintLimits_Bounds() (gas: 1102128)
+[PASS] test_SetMintLimits_NotOwnerCannotSchedule() (gas: 36502)
+[PASS] test_SetMintLimits_OnlyViaTimelock() (gas: 34193)
+[PASS] test_SetMintLimits_TimelockFlow_EmitsEvent() (gas: 160737)
+[PASS] test_Taper_HalfAt155() (gas: 412844)
+[PASS] test_Taper_ZeroAtFloor_MintBlocked_RedeemAndTopUpWork() (gas: 1129606)
+[PASS] test_WindowCap_ResetsNextWindow() (gas: 1257255)
+Suite result: ok. 16 passed; 0 failed; 0 skipped; finished in 12.67s (12.67s CPU time)
+
+Ran 20 tests for test/RedeemTiers.t.sol:RedeemTiersTest
+[PASS] testFuzz_MintThenFullRedeemNotProfitable(uint256,uint256) (runs: 10000, μ: 712868, ~: 709080)
+[PASS] testFuzz_RedeemNeverLowersCoverage(uint256,uint256,uint256,uint256,uint256,uint256) (runs: 10000, μ: 1941770, ~: 2037848)
+[PASS] test_AutoResume_ByWorkingPrice() (gas: 641839)
+[PASS] test_Boundary_115_AndAutoResumeByTopUp() (gas: 1104289)
+[PASS] test_Boundary_140() (gas: 1193906)
+[PASS] test_Boundary_140_JustBelowRedeemsWithoutBuffer() (gas: 786994)
+[PASS] test_Full_StillLimitedByStableReserve() (gas: 987522)
+[PASS] test_NoEventWhenTierUnchanged() (gas: 485421)
+[PASS] test_PokeTier_AfterFeedMove() (gas: 890452)
+[PASS] test_Quote_DepegNotExecutable() (gas: 708584)
+[PASS] test_Quote_NotExecutable() (gas: 558862)
+[PASS] test_Quote_StandardAndFull() (gas: 597520)
+[PASS] test_Slippage_WhenTierDropsBeforeExecution() (gas: 953319)
+[PASS] test_Tier_AfterMintIsStandard() (gas: 307489)
+[PASS] test_Tier_ZeroSupplyIsFull() (gas: 45977)
+[PASS] test_TopUp() (gas: 682734)
+[PASS] test_Transition_ByIndexDrop() (gas: 507402)
+[PASS] test_Transition_ByWorkingPrice() (gas: 661305)
+[PASS] test_Transition_ManualStablePriceEmits() (gas: 297675)
+[PASS] test_Transition_StandardRedemptionsAccumulateBuffer() (gas: 1106449)
+Suite result: ok. 20 passed; 0 failed; 0 skipped; finished in 16.95s (16.95s CPU time)
+
+Ran 7 tests for test/Reentrancy.t.sol:ReentrancyTest
+[PASS] test_CEI_Mint_ViewSeesPreState() (gas: 714801)
+[PASS] test_CEI_Redeem_StateFinalBeforeTransfer() (gas: 603589)
+[PASS] test_Reenter_DuringMint_AllFunctionsBlocked() (gas: 1856277)
+[PASS] test_Reenter_DuringRedeem_AllFunctionsBlocked() (gas: 1975810)
+[PASS] test_Reenter_DuringTopUp_AllFunctionsBlocked() (gas: 1237080)
+[PASS] test_Reenter_FromFeeRecipientHook() (gas: 496640)
+[PASS] test_Regression_F07_PokeTierNonReentrant() (gas: 334154)
+Suite result: ok. 7 passed; 0 failed; 0 skipped; finished in 6.39ms (4.60ms CPU time)
+
+Ran 26 tests for test/unit/StageB.t.sol:StageBTest
+[PASS] testFuzz_Pause_NeverLongerThanMax(uint256) (runs: 10000, μ: 87557, ~: 87796)
+[PASS] test_Guardian_CanPauseButNotUnpause() (gas: 275581)
+[PASS] test_Guardian_NoOtherPowers() (gas: 247994)
+[PASS] test_Guardian_RevokeIsInstant() (gas: 214916)
+[PASS] test_Guardian_ViaConstructor() (gas: 85236)
+[PASS] test_Pause_CannotBeExtended() (gas: 110832)
+[PASS] test_Pause_CooldownAfterExpiry_MaxDutyCycle() (gas: 390322)
+[PASS] test_Pause_CooldownAfterUnpause() (gas: 447652)
+[PASS] test_Pause_ExpiresAutomatically() (gas: 573317)
+[PASS] test_Sequencer_Down_BlocksMintAndRedeem() (gas: 963566)
+[PASS] test_Sequencer_EOAFeedInvalid_AndDisable() (gas: 455480)
+[PASS] test_Sequencer_GracePeriodBoundary() (gas: 732974)
+[PASS] test_Sequencer_InvalidAnswers() (gas: 898962)
+[PASS] test_Sequencer_UpLongEnough_Works() (gas: 766624)
+[PASS] test_Timelock_Cancel() (gas: 186954)
+[PASS] test_Timelock_DelaysPerSelector() (gas: 53387)
+[PASS] test_Timelock_DirectCallsRevert() (gas: 109264)
+[PASS] test_Timelock_Expiry() (gas: 275277)
+[PASS] test_Timelock_FullCycle_WithEvents() (gas: 232274)
+[PASS] test_Timelock_IndexStillDirect_On28th() (gas: 84521)
+[PASS] test_Timelock_InnerRevertBubbles_OpStaysConsumed() (gas: 107938)
+[PASS] test_Timelock_ManualPriceAndFeed() (gas: 767644)
+[PASS] test_Timelock_ScheduleValidation() (gas: 299574)
+[PASS] test_TokenRole_GrantRevokeVia7DayTimelock() (gas: 433204)
+[PASS] test_TokenRole_OwnerCannotGrantDirectly() (gas: 148013)
+[PASS] test_TokenRole_UnregisteredTokenReverts() (gas: 115736)
+Suite result: ok. 26 passed; 0 failed; 0 skipped; finished in 305.84ms (304.28ms CPU time)
+
+Ran 21 tests for test/unit/V52.t.sol:V52Test
+[PASS] testFuzz_AA2_FreezeContiguous(uint256,uint256) (runs: 10000, μ: 122848, ~: 122355)
+[PASS] testFuzz_AA3_StepBound(uint256) (runs: 10000, μ: 52718, ~: 45645)
+[PASS] testFuzz_AA4_RollingHour(uint256) (runs: 10000, μ: 2393203, ~: 2398820)
+[PASS] test_AA1_ConstructorFeeds() (gas: 884472)
+[PASS] test_AA1_ConstructorRejectsBadFeed() (gas: 424133)
+[PASS] test_AA1_DepegArbitrageBlocked() (gas: 408611)
+[PASS] test_AA1_GuardianFreezesStableMint_Instantly() (gas: 974105)
+[PASS] test_AA1_OnlyOwnerOrGuardian_UnfreezeOnlyViaTimelock() (gas: 237516)
+[PASS] test_AA2_FreezeTwoDays_CoversWholeIntervalBefore28th() (gas: 5052437)
+[PASS] test_AA2_MaxFreezeBound() (gas: 105349)
+[PASS] test_AA3_SetIndexNotBlocked() (gas: 198924)
+[PASS] test_AA3_StepLimitAndCooldown() (gas: 434027)
+[PASS] test_AA4_ReportScenario_TrailingHourNeverExceedsCap() (gas: 1083758)
+[PASS] test_AA5_ConstructorValidatesFeed() (gas: 208669)
+[PASS] test_AA5_GuardianDisablesOnlyBrokenFeed() (gas: 1215566)
+[PASS] test_AA5_SetterRejectsSemanticallyBadFeed() (gas: 553207)
+[PASS] test_AA6_PreviewMintGenesisFloor() (gas: 64499)
+[PASS] test_AA6_PreviewMintMatchesMint() (gas: 700065)
+[PASS] test_AA6_PreviewMintMirrorsMintChecks() (gas: 529735)
+[PASS] test_AA6_QuoteRedeem_FeedUnavailableAndSequencer() (gas: 1897725)
+[PASS] test_AA7_BlacklistedTreasuryDoesNotBlockRedeem() (gas: 887056)
+Suite result: ok. 21 passed; 0 failed; 0 skipped; finished in 15.26s (15.27s CPU time)
+
+Ran 4 tests for test/Differential.t.sol:DifferentialRoundingTest
+[PASS] testFuzz_Diff_CoverageWithinOneBps(uint256,uint256,uint256) (runs: 10000, μ: 1938263, ~: 1937813)
+[PASS] testFuzz_Diff_MintMatchesReference(uint256,uint256,uint256,uint256) (runs: 10000, μ: 1525139, ~: 1525669)
+[PASS] testFuzz_Diff_RedeemWithinOneUnitOfExact(uint256,uint256,uint256,uint256,bool) (runs: 10000, μ: 1855083, ~: 1899731)
+[PASS] testFuzz_NoOverflowPanicAtExtremes(uint256,uint256,uint256,uint256) (runs: 10000, μ: 2053730, ~: 2060133)
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 23.78s (39.24s CPU time)
+
+Ran 1 test for test/security/FreeChecksV52.t.sol:TimelockRolesInvariant
+[PASS]
+TimelockRolesInvariant invariants:
+[PASS] invariant_NoAttackerAdmin
+[PASS] invariant_NoDirectTimelocked
+[PASS] invariant_NoEarlyOrExpiredExecute
+[PASS] invariant_TokenAdminOnlyVault
+ TimelockRolesInvariant invariants (runs: 1000, calls: 200000, reverts: 0)
+
+╭-----------------+---------------+-------+---------+----------╮
+| Contract        | Selector      | Calls | Reverts | Discards |
++==============================================================+
+| TimelockHandler | attackerCall  | 40117 | 0       | 0        |
+|-----------------+---------------+-------+---------+----------|
+| TimelockHandler | ownerDirect   | 40140 | 0       | 0        |
+|-----------------+---------------+-------+---------+----------|
+| TimelockHandler | ownerExecute  | 39971 | 0       | 0        |
+|-----------------+---------------+-------+---------+----------|
+| TimelockHandler | ownerSchedule | 40069 | 0       | 0        |
+|-----------------+---------------+-------+---------+----------|
+| TimelockHandler | warp          | 39703 | 0       | 0        |
+╰-----------------+---------------+-------+---------+----------╯
+
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 26.09s (26.09s CPU time)
+
+Ran 1 test for test/invariant/MintLimitsInvariant.t.sol:MintLimitsInvariantTest
+[PASS]
+MintLimitsInvariantTest invariants:
+[PASS] invariant_MintNeverBelowFloor
+[PASS] invariant_NoMintDuringFreeze
+[PASS] invariant_OnlyLimitReverts
+[PASS] invariant_SolventVsLiabilityAtP
+[PASS] invariant_WindowAndBlockCaps
+ MintLimitsInvariantTest invariants (runs: 1000, calls: 200000, reverts: 0)
+
+╭------------------+------------------+-------+---------+----------╮
+| Contract         | Selector         | Calls | Reverts | Discards |
++==================================================================+
+| MintLimitHandler | advance          | 33404 | 0       | 0        |
+|------------------+------------------+-------+---------+----------|
+| MintLimitHandler | mint             | 33411 | 0       | 0        |
+|------------------+------------------+-------+---------+----------|
+| MintLimitHandler | moveWorkingPrice | 33441 | 0       | 0        |
+|------------------+------------------+-------+---------+----------|
+| MintLimitHandler | redeem           | 33213 | 0       | 0        |
+|------------------+------------------+-------+---------+----------|
+| MintLimitHandler | setIndex         | 32964 | 0       | 0        |
+|------------------+------------------+-------+---------+----------|
+| MintLimitHandler | topUp            | 33567 | 0       | 0        |
+╰------------------+------------------+-------+---------+----------╯
+
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 34.48s (34.48s CPU time)
+
+Ran 1 test for test/invariant/Invariants.t.sol:NoProfitInvariants
+[PASS]
+NoProfitInvariants invariants:
+[PASS] invariant_BalanceCoversReserves
+[PASS] invariant_NoActorProfitsWithoutTopUp
+ NoProfitInvariants invariants (runs: 1000, calls: 200000, reverts: 0)
+
+╭--------------+----------------+-------+---------+----------╮
+| Contract     | Selector       | Calls | Reverts | Discards |
++============================================================+
+| VaultHandler | mint           | 33080 | 0       | 0        |
+|--------------+----------------+-------+---------+----------|
+| VaultHandler | redeem         | 33104 | 0       | 0        |
+|--------------+----------------+-------+---------+----------|
+| VaultHandler | setFeedPrice   | 33223 | 0       | 0        |
+|--------------+----------------+-------+---------+----------|
+| VaultHandler | setManualPrice | 33326 | 0       | 0        |
+|--------------+----------------+-------+---------+----------|
+| VaultHandler | togglePause    | 33522 | 0       | 0        |
+|--------------+----------------+-------+---------+----------|
+| VaultHandler | warp           | 33745 | 0       | 0        |
+╰--------------+----------------+-------+---------+----------╯
+
+Logs:
+  no-profit run calls/ok: 201 159
+
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 62.57s (62.56s CPU time)
+
+Ran 1 test for test/invariant/Invariants.t.sol:VaultInvariants
+[PASS]
+VaultInvariants invariants:
+[PASS] invariant_BalanceCoversReserves
+[PASS] invariant_BalanceEqualsReserves
+[PASS] invariant_FeesMatchGhost
+[PASS] invariant_IndexChangeWithinLimit
+[PASS] invariant_MintKeepsCoverageFloor
+[PASS] invariant_NoRedeemBelow115
+[PASS] invariant_NothingWhileDepegged
+[PASS] invariant_NothingWhilePaused
+[PASS] invariant_RedeemNeverLowersCoverage
+[PASS] invariant_SupplyMatchesGhost
+[PASS] invariant_TierMatchesCoverage
+ VaultInvariants invariants (runs: 1000, calls: 200000, reverts: 0)
+
+╭--------------+-----------------+-------+---------+----------╮
+| Contract     | Selector        | Calls | Reverts | Discards |
++=============================================================+
+| VaultHandler | claimFees       | 20007 | 0       | 0        |
+|--------------+-----------------+-------+---------+----------|
+| VaultHandler | mint            | 20005 | 0       | 0        |
+|--------------+-----------------+-------+---------+----------|
+| VaultHandler | redeem          | 19904 | 0       | 0        |
+|--------------+-----------------+-------+---------+----------|
+| VaultHandler | setFeedPrice    | 20146 | 0       | 0        |
+|--------------+-----------------+-------+---------+----------|
+| VaultHandler | setIndex        | 19873 | 0       | 0        |
+|--------------+-----------------+-------+---------+----------|
+| VaultHandler | setManualPrice  | 19994 | 0       | 0        |
+|--------------+-----------------+-------+---------+----------|
+| VaultHandler | setWorkingPrice | 19855 | 0       | 0        |
+|--------------+-----------------+-------+---------+----------|
+| VaultHandler | togglePause     | 20057 | 0       | 0        |
+|--------------+-----------------+-------+---------+----------|
+| VaultHandler | topUp           | 20124 | 0       | 0        |
+|--------------+-----------------+-------+---------+----------|
+| VaultHandler | warp            | 20035 | 0       | 0        |
+╰--------------+-----------------+-------+---------+----------╯
+
+Logs:
+  full run calls/ok: 182 145
+
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 123.56s (123.55s CPU time)
+
+Ran 2 tests for test/security/FreeChecksV52.t.sol:RoundTripFuzz
+[PASS] testFuzz_RoundTripNoProfit(uint256,uint8,uint256) (runs: 10000, μ: 960603, ~: 735080)
+[PASS] testFuzz_SplitRedeemNoGain(uint256,uint8) (runs: 10000, μ: 1285757, ~: 1081324)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 130.90s (16.95s CPU time)
+
+Ran 22 test suites in 130.91s (454.90s CPU time): 283 tests passed, 0 failed, 0 skipped (283 total tests)
+ci exit=0
